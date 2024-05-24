@@ -7,19 +7,35 @@ readme = "README.md"
 packages = [{include = "src", from = "."}]
 
 [tool.poetry.dependencies]
-python = ">=3.10"
+python = ">=3.10,<3.11.0 || >3.11.0"
+opencv-contrib-python-headless = "^4.9.0.80"
+matplotlib = "^3.8.4"
+natsort = "^8.4.0"
+scikit-learn = "^1.4.2"
+addict = "^2.4.0"
+pandas = "^2.2.2"
+mpld3 = "^0.5.10"
+numpy = "^1.26.4"
+open3d = "^0.18.0"
+tqdm = "^4.66.4"
+small-gicp = "^0.0.6"
+numba = "^0.59.1"
+tbb = "^2021.12.0"
+scipy = "^1.13.0"
+scikit-image = "^0.23.2"
+wandb = "^0.17.0"
+
 
 
 
 
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^8.1.1"
-pre-commit = "^3.7.1"
-pytest-cov = "^5.0.0"
-
-[tool.poetry.scripts]
-# tests = 'poetry_scripts:run_tests'
+pytest = "^8.0.0"
+pre-commit = "^3.7.0"
+pytest-cov = "^4.1.0"
+scalene = "^1.5.40"
+pyqt6 = "^6.7.0"
 
 [tool.semantic_release]
 version_variables = ["src/__init__.py:__version__"]

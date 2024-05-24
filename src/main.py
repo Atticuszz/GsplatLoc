@@ -10,6 +10,8 @@ import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+from slam import Slam2D
+
 LOG_FILE = Path(__file__).parents[1] / "tests/main.log"
 
 
@@ -38,4 +40,10 @@ def setup_logging(level: int = logging.INFO) -> None:
 setup_logging()
 
 if __name__ == "__main__":
-    logging.info("Hello World!")
+    # slam = Slam2D(
+    #     "/home/atticuszz/DevSpace/python/AutoDrive_frontend/src/camera/camera_config.yaml"
+    # )
+    input_dir = Path(__file__).parents[1] / "Datasets/Replica/room0"
+    config_file = Path(__file__).parents[1] / "Datasets/Replica/cam_params.json"
+    slam = Slam2D(input_dir.as_posix(), config_file.as_posix())
+    slam.run()
