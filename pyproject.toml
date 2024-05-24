@@ -1,6 +1,6 @@
 [tool.poetry]
-name = "py-project-template"
-version = "0.0.2"
+name = "AB-GICP"
+version = "0.0.1"
 description = ""
 authors = ["Atticuszz <1831768457@qq.com>"]
 readme = "README.md"
@@ -19,14 +19,14 @@ pre-commit = "^3.7.1"
 pytest-cov = "^5.0.0"
 
 [tool.poetry.scripts]
-tests = 'poetry_scripts:run_tests'
+# tests = 'poetry_scripts:run_tests'
 
 [tool.semantic_release]
 version_variables = ["src/__init__.py:__version__"]
 version_toml = ["pyproject.toml:tool.poetry.version"]
 branch = "main"
 upload_to_vcs_release = true
-build_command = "pip install poetry && poetry build"
+# build_command = "pip install poetry && poetry build"
 commit_message = "chore(release): bump version to v{version}"
 changelog_components = "semantic_release.changelog.changelog_headers,semantic_release.changelog.compare_url"
 changelog_file = "CHANGELOG.md"
