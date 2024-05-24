@@ -50,10 +50,17 @@ class PointCloudProcessor(Scan2ScanICP):
 
             self.gt_poses.append(rgbd_image.pose)
             new_pcd = rgbd_image.pointclouds(8)
-            if not self.estimated_poses:
-                estimate_pose = self.align_pcd(new_pcd, rgbd_image.pose)
+            # if not self.estimated_poses:
+            #     estimate_pose = self.align_pcd(new_pcd, rgbd_image.pose)
+            # else:
+            #     estimate_pose = self.align_pcd(new_pcd)
+            if len(self.gt_poses) < 2:
+                estimate_pose = self.align_pcd_gt_pose(new_pcd, rgbd_image.pose)
             else:
-                estimate_pose = self.align_pcd(new_pcd)
+                T_last_current = self.gt_poses[-1] @ np.linalg.inv(self.gt_poses[-2])
+                estimate_pose = self.align_pcd_gt_pose(
+                    new_pcd, T_last_current=T_last_current
+                )
             end = cv2.getTickCount()
             self.stamps.append((end - start) / cv2.getTickFrequency())
 

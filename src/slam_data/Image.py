@@ -81,7 +81,6 @@ class RGBDImage:
         else:
             return points.reshape(-1, 3)
 
-    # TODO: too slow
     def camera_to_world(
         self,
         c2w: np.ndarray,
@@ -97,10 +96,7 @@ class RGBDImage:
             points_camera = self.pointclouds()
         else:
             points_camera = pcd_c
-        # Perform in-place transformation
-        points_camera @= c2w.T
-
-        return points_camera
+        return points_camera @ c2w.T
 
     def _grid_downsample(self, stride: int = 1) -> tuple[
         NDArray[np.signedinteger | long],

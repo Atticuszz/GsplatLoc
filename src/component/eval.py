@@ -4,6 +4,10 @@ import numpy as np
 from numpy.typing import NDArray
 import wandb
 
+from src.component import Scan2ScanICP
+from src.slam_data import Replica, RGBDImage
+from src.slam_data.dataset import DataLoaderBase
+
 
 class WandbLogger:
     def __init__(self):
@@ -46,17 +50,8 @@ class WandbLogger:
         """
         wandb.log({"COM Difference": com_diff}, step=step)
 
-    def log_align_time(self, time: float, step: int):
-        """
-        Log the alignment time to wandb.
-        """
-        wandb.log({"Alignment Time": time}, step=step)
-
-    def log_downsample_time(self, time: float, step: int):
-        """
-        Log the downsample time to wandb.
-        """
-        wandb.log({"Downsample Time": time}, step=step)
+    def log_align_fps(self, fps: float, step: int):
+        wandb.log({"Alignment Fps": fps}, step=step)
 
     def log_iter_times(self, iter_times: int, step: int):
         """
@@ -120,7 +115,10 @@ def calculate_rotation_error(
     delta_R = R_est @ R_true.T
     # 计算旋转角度
     trace_value = np.trace(delta_R)
-    theta = np.arccos((trace_value - 1) / 2)
+    cos_theta = (trace_value - 1) / 2
+    # cos_theta = np.clip(cos_theta, -1, 1)  # 确保值在合法范围内
+    theta = np.arccos(cos_theta)
+
     # 返回以度为单位的旋转误差
     rotation_error = np.degrees(theta)
     return rotation_error
@@ -171,3 +169,66 @@ def diff_pcd_COM(pcd_1: NDArray[np.float64], pcd_2: NDArray[np.float64]) -> floa
     com2 = np.mean(pcd_2, axis=0)
     distance = np.linalg.norm(com1 - com2)
     return distance
+
+
+def run_eval(
+    max_images: int = 2000,
+    data: DataLoaderBase = Replica(),
+    registration: Scan2ScanICP = Scan2ScanICP(),
+    logger: WandbLogger = WandbLogger(),
+):
+    """
+    Run evaluation on the given dataset using the provided registration method and logger.
+    Parameters
+    ----------
+    max_images: int = 2000
+    data: dataset loader
+    registration: registration method
+    logger: logger configuration
+    """
+
+    data = Replica()
+    registration = Scan2ScanICP()
+    logger = WandbLogger()
+    pre_pose = None
+    for i, rgbd_image in enumerate(data):
+
+        if i >= max_images:
+            break
+        # print(f"Processing image {i + 1}/{len(data)}...")
+        rgbd_image: RGBDImage
+        # convert tensors to numpy arrays
+        if rgbd_image.pose is None:
+            raise ValueError("Pose is not available.")
+        pre_pose = rgbd_image.pose
+
+        # NOTE: down sample
+        new_pcd = rgbd_image.pointclouds(8)
+
+        # NOTE: align interface
+        if i == 0:
+            res = registration.align_pcd_gt_pose(new_pcd, rgbd_image.pose)
+            continue
+        else:
+            T_last_current = rgbd_image.pose @ np.linalg.inv(pre_pose)
+            res = registration.align_pcd_gt_pose(new_pcd, T_last_current)
+
+        # NOTE: align data
+        logger.log_align_error(res.error, i)
+        logger.log_iter_times(res.iterations, i)
+        # NOTE: eT
+        est_pose = registration.T_world_camera
+        eT = calculate_translation_error(est_pose, rgbd_image.pose)
+        logger.log_translation_error(eT, i)
+        # NOTE:ER
+        eR = calculate_rotation_error(est_pose, rgbd_image.pose)
+        logger.log_rotation_error(eR, i)
+        # NOTE:RMSE
+        gt_pcd = rgbd_image.camera_to_world(rgbd_image.pose, new_pcd)
+        est_pcd = rgbd_image.camera_to_world(est_pose, new_pcd)
+        rmse = calculate_pointcloud_rmse(est_pcd, gt_pcd)
+        logger.log_rmse_pcd(rmse, i)
+        # NOTE:COM
+        com = diff_pcd_COM(est_pcd, gt_pcd)
+        logger.log_com_diff(com, i)
+    logger.finish()
