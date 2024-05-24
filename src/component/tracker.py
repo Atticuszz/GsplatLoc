@@ -15,9 +15,9 @@ class Scan2ScanICP:
 
     def __init__(
         self,
-        downsampling_resolution=0.05,  # Adjusted for potentially denser point clouds from depth images
+        downsampling_resolution=0.01,  # Adjusted for potentially denser point clouds from depth images
         max_corresponding_distance=0.1,
-        num_threads=12,
+        num_threads=32,
         registration_type: Literal["ICP", "PLANE_ICP", "GICP", "VGICP"] = "GICP",
         error_threshold: float = 50.0,
     ):
@@ -48,7 +48,8 @@ class Scan2ScanICP:
         self,
         raw_points: NDArray[np.float64],
         init_pose: NDArray[np.float64] | None = None,
-    ) -> NDArray[np.float64]:
+        # ) -> NDArray[np.float64]:
+    ) -> small_gicp.RegistrationResult:
         """
         Align new point cloud to the previous point cloud using small_gicp library.
 
@@ -94,7 +95,8 @@ class Scan2ScanICP:
         self.previous_pcd = downsampled
         self.previous_tree = tree
 
-        return self.T_world_camera
+        # return self.T_world_camera
+        return result
 
     def keyframe(self) -> bool:
         if self.previous_pcd is None:

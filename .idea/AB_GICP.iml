@@ -4,6 +4,13 @@
     <content url="file://$MODULE_DIR$" />
     <orderEntry type="jdk" jdkName="Poetry (AB_GICP)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
-    <orderEntry type="module" module-name="AutoDrive_frontend" />
+  </component>
+  <component name="PackageRequirementsSettings">
+    <option name="requirementsPath" value="" />
+  </component>
+  <component name="PyDocumentationSettings">
+    <option name="format" value="NUMPY" />
+    <option name="myDocStringFormat" value="NumPy" />
+    <option name="renderExternalDocumentation" value="true" />
   </component>
 </module>

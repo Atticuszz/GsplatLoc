@@ -1,5 +1,4 @@
 from collections import deque
-from pathlib import Path
 
 import cv2
 import numba
@@ -50,7 +49,7 @@ class PointCloudProcessor(Scan2ScanICP):
                 raise ValueError("Pose is not available.")
 
             self.gt_poses.append(rgbd_image.pose)
-            new_pcd = rgbd_image.depth_to_pointcloud(8)
+            new_pcd = rgbd_image.pointclouds(8)
             if not self.estimated_poses:
                 estimate_pose = self.align_pcd(new_pcd, rgbd_image.pose)
             else:

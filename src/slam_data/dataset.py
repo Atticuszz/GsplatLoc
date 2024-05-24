@@ -4,8 +4,7 @@ import cv2
 import numpy as np
 from natsort import natsorted
 
-from utils import as_intrinsics_matrix, load_camera_cfg
-
+from ..utils import as_intrinsics_matrix, load_camera_cfg
 from .Image import RGBDImage
 
 

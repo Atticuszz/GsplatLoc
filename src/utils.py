@@ -1,10 +1,10 @@
 import json
 from pathlib import Path
 
-from numpy.typing import NDArray
 import numpy as np
 import yaml
 from matplotlib import pyplot as plt
+from numpy.typing import NDArray
 
 # from numba import jit, prange
 # from numpy.typing import NDArray
