@@ -16,7 +16,7 @@ python = ">=3.10"
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.1.1"
 pre-commit = "^3.7.1"
-pytest-cov = "^4.1.0"
+pytest-cov = "^5.0.0"
 
 [tool.poetry.scripts]
 tests = 'poetry_scripts:run_tests'
