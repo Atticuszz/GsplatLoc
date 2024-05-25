@@ -19,10 +19,7 @@ numpy = "^1.26.4"
 open3d = "^0.18.0"
 tqdm = "^4.66.4"
 small-gicp = "^0.0.6"
-numba = "^0.59.1"
-tbb = "^2021.12.0"
 scipy = "^1.13.0"
-scikit-image = "^0.23.2"
 wandb = "^0.17.0"
 
 

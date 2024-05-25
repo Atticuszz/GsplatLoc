@@ -1,4 +1,3 @@
 ## RoadMap
-1. [ ] wandb collect filter results
-2. [ ] experiments env build for replica
-3. [ ] test _bilateralFilter and _medianFilter
+1. [x] experiments core env build for replica
+2. [ ] test grid and voxel downsample with different ratio  with open3d small_gicp ,different icps

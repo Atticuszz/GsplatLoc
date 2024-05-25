@@ -1,0 +1,6 @@
+[submodule "thirdparty/small_gicp"]
+	path = thirdparty/small_gicp
+	url = git@github.com:SupaVision/small_gicp.git
+[submodule "thirdparty/AB_GICP_c"]
+	path = thirdparty/AB_GICP_c
+	url = git@github.com:Atticuszz/AB_GICP_c.git
