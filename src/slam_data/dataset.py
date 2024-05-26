@@ -92,7 +92,8 @@ class Replica(DataLoaderBase):
 
     def _get_rgb(self, index: int | None = None) -> np.ndarray:
         color_path = self.color_paths[index]
-        color = cv2.imread(color_path.as_posix()).astype(np.float64)
+        # convert to rgb
+        color = cv2.imread(color_path.as_posix(), cv2.IMREAD_COLOR).astype(np.float64)
         return color
 
     def load_poses(self, index: int | None = None) -> list[np.ndarray]:

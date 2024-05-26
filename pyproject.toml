@@ -21,6 +21,7 @@ tqdm = "^4.66.4"
 small-gicp = "^0.0.6"
 scipy = "^1.13.0"
 wandb = "^0.17.0"
+torchimize = "^0.0.16"
 
 
 
