@@ -10,6 +10,8 @@ from .Image import RGBDImage
 
 class DataLoaderBase:
     def __init__(self, input_folder: str, cfg_file: str):
+        assert Path(input_folder).exists(), f"Path {input_folder} does not exist."
+        assert Path(cfg_file).exists(), f"Path {cfg_file} does not exist."
         self.input_folder = Path(input_folder)
         cfg_file = Path(cfg_file)
         self.cfg = load_camera_cfg(cfg_file.as_posix())["camera"]
@@ -53,13 +55,19 @@ class DataLoaderBase:
 class Replica(DataLoaderBase):
     def __init__(
         self,
-        input_folder: Path = Path(__file__).parents[2] / "Datasets/Replica/room0",
+        name: str = "room0",
+        *,
+        input_folder: Path = Path(__file__).parents[2] / "Datasets/Replica",
         cfg_file: Path = Path(__file__).parents[2] / "Datasets/Replica/cam_params.json",
     ):
-        super().__init__(input_folder.as_posix(), cfg_file.as_posix())
+        self.name = name
+        super().__init__((input_folder / name).as_posix(), cfg_file.as_posix())
         self.color_paths, self.depth_paths = self.filepaths()
         self.num_img = len(self.color_paths)
         self.poses = self.load_poses()
+
+    def __str__(self):
+        return f"Replica dataset: {self.name}\n in {self.input_folder}"
 
     def __len__(self):
         return self.num_img

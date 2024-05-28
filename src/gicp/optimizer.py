@@ -1,6 +1,6 @@
 import torch
-import numpy as np
 from torchimize.functions import lsq_lma_parallel
+
 from .pcd import PointClouds
 
 

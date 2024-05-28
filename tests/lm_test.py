@@ -1,7 +1,7 @@
 from timeit import default_timer
 
-from scipy.optimize import least_squares
 import numpy as np
+from scipy.optimize import least_squares
 
 
 def model(x, t):

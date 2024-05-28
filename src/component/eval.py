@@ -1,30 +1,31 @@
 from datetime import datetime
+from typing import Literal, NamedTuple
 
 import numpy as np
 from numpy.typing import NDArray
-import wandb
 
+import wandb
 from src.component import Scan2ScanICP
 from src.slam_data import Replica, RGBDImage
 from src.slam_data.dataset import DataLoaderBase
 
 
 class WandbLogger:
-    def __init__(self):
+    def __init__(self, run_name: str | None = None, config: dict = None):
         """
         Initialize the Weights & Biases logging.
         """
-        run_name = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        if run_name is None:
+            run_name = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        else:
+            run_name = run_name + "_" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         wandb.init(
             project="ABGICP",
             entity="supavision",
-            config={
-                "algorithm": "Improved ICP",
-                "dataset": "3D Point Clouds",
-                "description": "Testing translation and rotation error metrics",
-            },
             name=run_name,
+            config=config,
         )
+        print(f"Run name: {run_name}:config: {config}")
 
     def log_translation_error(self, eT: float, step: int):
         """
@@ -171,64 +172,75 @@ def diff_pcd_COM(pcd_1: NDArray[np.float64], pcd_2: NDArray[np.float64]) -> floa
     return distance
 
 
-def run_eval(
-    max_images: int = 2000,
-    data: DataLoaderBase = Replica(),
-    registration: Scan2ScanICP = Scan2ScanICP(),
-    logger: WandbLogger = WandbLogger(),
-):
-    """
-    Run evaluation on the given dataset using the provided registration method and logger.
-    Parameters
-    ----------
-    max_images: int = 2000
-    data: dataset loader
-    registration: registration method
-    logger: logger configuration
-    """
+class RegistrationConfig(NamedTuple):
+    max_corresponding_distance: float = 0.1
+    num_threads: int = 32
+    registration_type: Literal["ICP", "PLANE_ICP", "GICP", "VGICP"] = "GICP"
+    voxel_downsampling_resolutions: float | None = None
+    grid_downsample_resolution: int | None = None
 
-    data = Replica()
-    registration = Scan2ScanICP()
-    logger = WandbLogger()
-    pre_pose = None
-    for i, rgbd_image in enumerate(data):
 
-        if i >= max_images:
-            break
-        # print(f"Processing image {i + 1}/{len(data)}...")
-        rgbd_image: RGBDImage
-        # convert tensors to numpy arrays
-        if rgbd_image.pose is None:
-            raise ValueError("Pose is not available.")
-        pre_pose = rgbd_image.pose
+class Experiment:
+    def __init__(
+        self,
+        name: str,
+        registration_config: RegistrationConfig,
+        extra_config: dict = None,
+    ):
+        self.data: DataLoaderBase = Replica(name)
+        self.backends = Scan2ScanICP(
+            voxel_downsampling_resolutions=registration_config.voxel_downsampling_resolutions,
+            registration_type=registration_config.registration_type,
+            num_threads=registration_config.num_threads,
+            max_corresponding_distance=registration_config.max_corresponding_distance,
+        )
+        if extra_config is None:
+            extra_config = {}
+        wandb_config = registration_config._asdict()
+        wandb_config.update({"name": name, **extra_config})
+        self.logger = WandbLogger(run_name=name, config=wandb_config)
 
-        # NOTE: down sample
-        new_pcd = rgbd_image.pointclouds(8)
+    def run(self, max_images: int = 2000):
 
-        # NOTE: align interface
-        if i == 0:
-            res = registration.align_pcd_gt_pose(new_pcd, rgbd_image.pose)
-            continue
-        else:
-            T_last_current = rgbd_image.pose @ np.linalg.inv(pre_pose)
-            res = registration.align_pcd_gt_pose(new_pcd, T_last_current)
+        pre_pose = None
+        for i, rgbd_image in enumerate(self.data):
 
-        # NOTE: align data
-        logger.log_align_error(res.error, i)
-        logger.log_iter_times(res.iterations, i)
-        # NOTE: eT
-        est_pose = registration.T_world_camera
-        eT = calculate_translation_error(est_pose, rgbd_image.pose)
-        logger.log_translation_error(eT, i)
-        # NOTE:ER
-        eR = calculate_rotation_error(est_pose, rgbd_image.pose)
-        logger.log_rotation_error(eR, i)
-        # NOTE:RMSE
-        gt_pcd = rgbd_image.camera_to_world(rgbd_image.pose, new_pcd)
-        est_pcd = rgbd_image.camera_to_world(est_pose, new_pcd)
-        rmse = calculate_pointcloud_rmse(est_pcd, gt_pcd)
-        logger.log_rmse_pcd(rmse, i)
-        # NOTE:COM
-        com = diff_pcd_COM(est_pcd, gt_pcd)
-        logger.log_com_diff(com, i)
-    logger.finish()
+            if i >= max_images:
+                break
+            # print(f"Processing image {i + 1}/{len(data)}...")
+            rgbd_image: RGBDImage
+            # convert tensors to numpy arrays
+            if rgbd_image.pose is None:
+                raise ValueError("Pose is not available.")
+            pre_pose = rgbd_image.pose
+
+            # NOTE: down sample
+            new_pcd = rgbd_image.pointclouds(1)
+
+            # NOTE: align interface
+            if i == 0:
+                res = self.backends.align_pcd_gt_pose(new_pcd, rgbd_image.pose)
+                continue
+            else:
+                T_last_current = rgbd_image.pose @ np.linalg.inv(pre_pose)
+                res = self.backends.align_pcd_gt_pose(new_pcd, T_last_current)
+
+            # NOTE: align data
+            self.logger.log_align_error(res.error, i)
+            self.logger.log_iter_times(res.iterations, i)
+            # NOTE: eT
+            est_pose = self.backends.T_world_camera
+            eT = calculate_translation_error(est_pose, rgbd_image.pose)
+            self.logger.log_translation_error(eT, i)
+            # NOTE:ER
+            eR = calculate_rotation_error(est_pose, rgbd_image.pose)
+            self.logger.log_rotation_error(eR, i)
+            # NOTE:RMSE
+            gt_pcd = rgbd_image.camera_to_world(rgbd_image.pose, new_pcd)
+            est_pcd = rgbd_image.camera_to_world(est_pose, new_pcd)
+            rmse = calculate_pointcloud_rmse(est_pcd, gt_pcd)
+            self.logger.log_rmse_pcd(rmse, i)
+            # NOTE:COM
+            com = diff_pcd_COM(est_pcd, gt_pcd)
+            self.logger.log_com_diff(com, i)
+        self.logger.finish()

@@ -3,8 +3,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 from numpy.typing import NDArray
 
-from src.slam_data import Replica
 from src.component import vis_depth_filter
+from src.slam_data import Replica
 
 
 # NOTE: noise maker

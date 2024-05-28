@@ -1,4 +1,5 @@
 from timeit import default_timer
+
 import numpy as np
 import small_gicp
 from scipy.spatial import cKDTree as ScipyKDTree

@@ -1,13 +1,12 @@
-import logging
 from typing import Literal
 
-import cv2
 import numpy as np
 import small_gicp
 from numpy.typing import NDArray
 
-
 # TODO: add registration base class and registration result class
+
+
 class Scan2ScanICP:
     """
     Scan-to-Scan ICP class for depth image-derived point clouds using small_gicp library.
@@ -16,14 +15,14 @@ class Scan2ScanICP:
 
     def __init__(
         self,
-        downsampling_resolution=0.001,  # Adjusted for potentially denser point clouds from depth images
+        voxel_downsampling_resolutions=0.01,  # Adjusted for potentially denser point clouds from depth images
         max_corresponding_distance=0.1,
         num_threads=32,
         registration_type: Literal["ICP", "PLANE_ICP", "GICP", "VGICP"] = "GICP",
         error_threshold: float = 50.0,
     ):
 
-        self.downsampling_resolution = downsampling_resolution
+        self.voxel_downsampling_resolutions = voxel_downsampling_resolutions
         self.max_corresponding_distance = max_corresponding_distance
         self.num_threads = num_threads
 
@@ -68,7 +67,9 @@ class Scan2ScanICP:
         """
         # down sample the point cloud
         downsampled, tree = small_gicp.preprocess_points(
-            raw_points, self.downsampling_resolution, num_threads=self.num_threads
+            raw_points,
+            self.voxel_downsampling_resolutions,
+            num_threads=self.num_threads,
         )
 
         # first frame
@@ -140,7 +141,9 @@ class Scan2ScanICP:
     ):
         # down sample the point cloud
         downsampled, tree = small_gicp.preprocess_points(
-            raw_points, self.downsampling_resolution, num_threads=self.num_threads
+            raw_points,
+            self.voxel_downsampling_resolutions,
+            num_threads=self.num_threads,
         )
 
         # first frame
@@ -170,5 +173,5 @@ class Scan2ScanICP:
         self.previous_pcd = downsampled
         self.previous_tree = tree
 
-        return self.T_world_camera
-        # return result
+        # return self.T_world_camera
+        return result
