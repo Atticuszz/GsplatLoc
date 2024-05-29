@@ -5,7 +5,7 @@
     <option name="enabledOnSave" value="true" />
     <option name="executionMode" value="BINARY" />
     <option name="pathToExecutable" value="$USER_HOME$/miniconda3/bin/black" />
-    <option name="sdkName" value="Poetry (AutoDrive_frontend) (2)" />
+    <option name="sdkName" value="Poetry (AB_GICP)" />
   </component>
   <component name="ProjectRootManager" version="2" project-jdk-name="Poetry (AB_GICP)" project-jdk-type="Python SDK" />
 </project>

@@ -14,6 +14,7 @@ class WandbLogger:
     def __init__(self, run_name: str | None = None, config: dict = None):
         """
         Initialize the Weights & Biases logging.
+        use wandb login with api key https://wandb.ai/authorize
         """
         if run_name is None:
             run_name = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -198,6 +199,7 @@ class Experiment:
             extra_config = {}
         wandb_config = registration_config._asdict()
         wandb_config.update({"name": name, **extra_config})
+        self.grid_downsample = registration_config.grid_downsample_resolution
         self.logger = WandbLogger(run_name=name, config=wandb_config)
 
     def run(self, max_images: int = 2000):
@@ -215,7 +217,7 @@ class Experiment:
             pre_pose = rgbd_image.pose
 
             # NOTE: down sample
-            new_pcd = rgbd_image.pointclouds(1)
+            new_pcd = rgbd_image.pointclouds(self.grid_downsample)
 
             # NOTE: align interface
             if i == 0:

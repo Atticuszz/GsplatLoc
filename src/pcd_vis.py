@@ -1,7 +1,6 @@
 from collections import deque
 
 import cv2
-import numba
 import numpy as np
 from matplotlib import pyplot as plt
 
@@ -9,8 +8,6 @@ from component import PcdVisualizer
 from component.tracker import Scan2ScanICP
 from src.slam_data.dataset import Replica
 from src.slam_data.Image import RGBDImage
-
-numba.config.THREADING_LAYER_PRIORITY = ["omp", "tbb", "workqueue"]
 
 
 class PointCloudProcessor(Scan2ScanICP):
@@ -70,13 +67,13 @@ class PointCloudProcessor(Scan2ScanICP):
 
             if i % 30 == 0:
                 self.vis.update_render(new_pcd, estimate_pose)
-                fps = 1 / np.mean(self.stamps)
-                self.vis.vis_trajectory(
-                    gt_poses=self.gt_poses,
-                    estimated_poses=self.estimated_poses,
-                    downsampling_resolution=self.downsampling_resolution,
-                    fps=fps,
-                )
+                # fps = 1 / np.mean(self.stamps)
+                # self.vis.vis_trajectory(
+                #     gt_poses=self.gt_poses,
+                #     estimated_poses=self.estimated_poses,
+                #     downsampling_resolution=self.voxel_downsampling_resolutions,
+                #     fps=fps,
+                # )
         self.vis.close()
 
     #     if save:

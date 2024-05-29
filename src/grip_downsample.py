@@ -21,13 +21,18 @@ if __name__ == "__main__":
     grid_downsample_resolutions = [1, 2, 4, 8, 10, 12, 16, 20]
     grid_downsample_resolutions.reverse()
 
-    rooms = ["room" + str(i) for i in range(3)] + ["office" + str(i) for i in range(5)][
-        :1
-    ]
+    rooms = ["room" + str(i) for i in range(3)] + ["office" + str(i) for i in range(5)]
+    finished = []
     for room in rooms:
         for method in methods:
             for voxel_downsampling_resolution in voxel_downsampling_resolutions:
                 for grid_downsample_resolution in grid_downsample_resolutions:
+                    if (
+                        room,
+                        grid_downsample_resolution,
+                        voxel_downsampling_resolution,
+                    ) in finished:
+                        continue
                     registration_config = RegistrationConfig(
                         registration_type=method,
                         voxel_downsampling_resolutions=voxel_downsampling_resolution,
