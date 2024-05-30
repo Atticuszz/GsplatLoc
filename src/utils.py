@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import torch
 import yaml
 from matplotlib import pyplot as plt
 from numpy.typing import NDArray
@@ -109,3 +110,10 @@ def depth_to_colormap(depth_image: NDArray):
 #             print("Warning: Non-invertible covariance matrix encountered.")
 #
 #     return total_error
+
+
+def to_tensor(data: NDArray, device: torch.device = "cuda:0") -> torch.Tensor:
+    """
+    Convert numpy array to pytorch tensor.
+    """
+    return torch.tensor(data, dtype=torch.float64, device=device)

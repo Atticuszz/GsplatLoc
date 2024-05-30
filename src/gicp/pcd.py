@@ -7,14 +7,6 @@ from numpy.typing import NDArray
 class PointClouds:
     """
     Point clouds data structure.
-    Parameters:
-    -----------
-    pcd: NDArray[np.float64], shape=(n, 4)
-        Point cloud data.
-    rgb: NDArray[np.float64], shape=(n, 3)
-        Color data.
-    threads: int, optional
-        Number of threads to use.
     """
 
     def __init__(
@@ -56,14 +48,14 @@ class PointClouds:
         return self._kdtree
 
     @property
-    def points(self) -> small_gicp.PointCloud:
+    def points(self) -> NDArray[np.float64]:
         """
         Returns
         -------
         pcd: NDArray[np.float64], shape=(n, 4)
             Point cloud data.
         """
-        return self._pcd
+        return self._pcd.points()
 
     @property
     def covs(self) -> NDArray[np.float64]:
