@@ -5,12 +5,12 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from component import PcdVisualizer
-from component.tracker import Scan2ScanICP
+from component.tracker import Scan2ScanICP, GICP
 from src.slam_data.dataset import Replica
 from src.slam_data.Image import RGBDImage
 
 
-class PointCloudProcessor(Scan2ScanICP):
+class PointCloudProcessor(GICP):
     """
     Responsibilities:
     - Visualize the aggregated point cloud  vis real-time and with the real trajectory

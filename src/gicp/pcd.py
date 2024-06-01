@@ -20,26 +20,29 @@ class PointClouds:
         self._threads = threads
 
         # convert to lab color space
-        self._lab = cv2.cvtColor(rgb.astype(np.uint8), cv2.COLOR_RGB2LAB).astype(
-            np.float64
-        )
+        # self._lab = cv2.cvtColor(rgb.astype(np.uint8), cv2.COLOR_RGB2LAB).astype(
+        #     np.float64
+        # )
 
-    def preprocess(self):
+    def __len__(self):
+        return self._pcd.size()
+
+    def preprocess(self, knn: int):
         """build kdtree and estimate normals and covariances."""
         self._kdtree = small_gicp.KdTree(self._pcd, num_threads=self._threads)
         small_gicp.estimate_normals_covariances(
-            self._pcd, self._kdtree, num_threads=self._threads
+            self._pcd, self._kdtree, num_threads=self._threads, num_neighbors=knn
         )
 
-    @property
-    def lab(self) -> NDArray[np.float64]:
-        """
-        Returns
-        -------
-        lab: NDArray[np.float64], shape=(n, 3)
-            Lab color data.
-        """
-        return self._lab
+    # @property
+    # def lab(self) -> NDArray[np.float64]:
+    #     """
+    #     Returns
+    #     -------
+    #     lab: NDArray[np.float64], shape=(n, 3)
+    #         Lab color data.
+    #     """
+    #     return self._lab
 
     @property
     def kdtree(self):

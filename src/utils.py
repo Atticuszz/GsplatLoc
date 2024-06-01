@@ -112,8 +112,12 @@ def depth_to_colormap(depth_image: NDArray):
 #     return total_error
 
 
-def to_tensor(data: NDArray, device: torch.device = "cuda:0") -> torch.Tensor:
+def to_tensor(
+    data: NDArray[np.float64] | list[float], device: torch.device = torch.device("cpu")
+) -> torch.Tensor:
     """
     Convert numpy array to pytorch tensor.
     """
+    if isinstance(data, list):
+        data = np.array(data)
     return torch.tensor(data, dtype=torch.float64, device=device)

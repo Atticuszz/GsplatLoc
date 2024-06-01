@@ -4,7 +4,39 @@ import numpy as np
 import small_gicp
 from numpy.typing import NDArray
 
+from src.gicp.optimizer import lm_optimize
+from src.gicp.pcd import PointClouds
+
+
 # TODO: add registration base class and registration result class
+
+
+class GICP:
+    def __init__(self):
+        self.previous_pcd: PointClouds | None = None
+        # every frame pose
+        self.T_world_camera = np.identity(4)  # World to camera transformation
+
+    def align_pcd_gt_pose(
+        self,
+        raw_points: NDArray[np.float64],
+        init_gt_pose: NDArray[np.float64] | None = None,
+        T_last_current: NDArray[np.float64] = np.identity(4),
+    ):
+        raw_points = PointClouds(raw_points, np.zeros_like(raw_points))
+        raw_points.preprocess(20)
+        # first frame
+        if self.previous_pcd is None:
+            self.previous_pcd = raw_points
+            self.T_world_camera = (
+                init_gt_pose if init_gt_pose is not None else np.identity(4)
+            )
+            return init_gt_pose
+
+        result = lm_optimize(T_last_current, self.previous_pcd, raw_points)
+        # Update the world transformation matrix
+        self.T_world_camera = self.T_world_camera @ result
+        return result
 
 
 class Scan2ScanICP:
@@ -173,5 +205,5 @@ class Scan2ScanICP:
         self.previous_pcd = downsampled
         self.previous_tree = tree
 
-        # return self.T_world_camera
-        return result
+        return self.T_world_camera
+        # return result

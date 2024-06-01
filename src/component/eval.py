@@ -118,7 +118,7 @@ def calculate_rotation_error(
     # 计算旋转角度
     trace_value = np.trace(delta_R)
     cos_theta = (trace_value - 1) / 2
-    # cos_theta = np.clip(cos_theta, -1, 1)  # 确保值在合法范围内
+    cos_theta = np.clip(cos_theta, -1, 1)  # 确保值在合法范围内
     theta = np.arccos(cos_theta)
 
     # 返回以度为单位的旋转误差
@@ -180,6 +180,17 @@ class RegistrationConfig(NamedTuple):
     voxel_downsampling_resolutions: float | None = None
     grid_downsample_resolution: int | None = None
 
+    def as_dict(self):
+        return {key: val for key, val in self._asdict().items() if val is not None}
+
+
+class WandbConfig(NamedTuple):
+    algorithm: str = "GICP"
+    implementation: str = "small_gicp"
+    dataset: str = "Replica"
+    sub_set: str = "office0"
+    description: str = "GICP on Replica dataset"
+
 
 class Experiment:
     def __init__(
@@ -197,7 +208,7 @@ class Experiment:
         )
         if extra_config is None:
             extra_config = {}
-        wandb_config = registration_config._asdict()
+        wandb_config = registration_config.as_dict()
         wandb_config.update({"name": name, **extra_config})
         self.grid_downsample = registration_config.grid_downsample_resolution
         self.logger = WandbLogger(run_name=name, config=wandb_config)

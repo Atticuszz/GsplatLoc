@@ -4,3 +4,6 @@
 [submodule "thirdparty/AB_GICP_c"]
 	path = thirdparty/AB_GICP_c
 	url = git@github.com:Atticuszz/AB_GICP_c.git
+[submodule "thirdparty/torchimize"]
+	path = thirdparty/torchimize
+	url = git@github.com:SupaVision/torchimize.git
