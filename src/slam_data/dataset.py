@@ -77,10 +77,10 @@ class Replica(DataLoaderBase):
             raise TypeError(f"index must be int but now is {type(index)}")
 
         # preprocess
-        # color = self._get_rgb(index)
+        color = self._get_rgb(index)
         depth = self._get_depth(index)
         pose = self._get_pose(index)
-        rgb_d = RGBDImage(depth, self.K, self.scale, pose)
+        rgb_d = RGBDImage(color, depth, self.K, self.scale, pose)
         return rgb_d
 
     def _get_pose(self, index: int | None = None) -> np.ndarray:

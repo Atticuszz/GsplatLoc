@@ -1,3 +1,4 @@
+import pprint
 from datetime import datetime
 from typing import Literal, NamedTuple
 
@@ -176,7 +177,7 @@ def diff_pcd_COM(pcd_1: NDArray[np.float64], pcd_2: NDArray[np.float64]) -> floa
 class RegistrationConfig(NamedTuple):
     max_corresponding_distance: float = 0.1
     num_threads: int = 32
-    registration_type: Literal["ICP", "PLANE_ICP", "GICP", "VGICP"] = "GICP"
+    registration_type: Literal["ICP", "PLANE_ICP", "GICP", "COLORED_ICP"] = ("GICP",)
     implementation: Literal["small_gicp", "open3d"] = "small_gicp"
     voxel_downsampling_resolutions: float | None = None
     # grid_downsample_resolution: int | None = None
@@ -197,25 +198,20 @@ class WandbConfig(NamedTuple):
 class Experiment:
     def __init__(
         self,
-        name: str,
         registration_config: RegistrationConfig,
         wandb_config: WandbConfig,
         extra_config: dict = None,
     ):
-        self.data: DataLoaderBase = Replica(name)
-        self.backends = Scan2ScanICP(
-            voxel_downsampling_resolutions=registration_config.voxel_downsampling_resolutions,
-            registration_type=registration_config.registration_type,
-            num_threads=registration_config.num_threads,
-            max_corresponding_distance=registration_config.max_corresponding_distance,
-        )
+        self.data: DataLoaderBase = Replica(wandb_config.sub_set)
+        self.backends = Scan2ScanICP(**registration_config.as_dict())
         if extra_config is None:
             extra_config = {}
         wandb_config = wandb_config._asdict()
         wandb_config.update({**registration_config.as_dict(), **extra_config})
+        pprint.pprint(wandb_config)
         # self.grid_downsample = registration_config.grid_downsample_resolution
         # self.knn = registration_config.knn
-        self.logger = WandbLogger(run_name=name, config=wandb_config)
+        self.logger = WandbLogger(config=wandb_config)
 
     def run(self, max_images: int = 2000):
 
@@ -231,8 +227,10 @@ class Experiment:
                 raise ValueError("Pose is not available.")
             pre_pose = rgbd_image.pose
 
-            # NOTE: down sample
-            new_pcd = rgbd_image.pointclouds()
+            if self.backends.registration_type == "COLORED_ICP":
+                new_pcd = rgbd_image.color_pcds(True)
+            else:
+                new_pcd = rgbd_image.color_pcds()
 
             # NOTE: align interface
             if i == 0:

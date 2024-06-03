@@ -50,7 +50,7 @@ class Scan2ScanICP:
         voxel_downsampling_resolutions=0.1,  # Adjusted for potentially denser point clouds from depth images
         max_corresponding_distance=0.1,
         num_threads=32,
-        registration_type: Literal["ICP", "PLANE_ICP", "GICP", "VGICP"] = "GICP",
+        registration_type: Literal["ICP", "PLANE_ICP", "GICP", "COLORED_ICP"] = "GICP",
         implementation: Literal["small_gicp", "open3d"] = "small_gicp",
         error_threshold: float = 50.0,
     ):
@@ -174,13 +174,17 @@ class Scan2ScanICP:
         T_last_current: NDArray[np.float64] = np.identity(4),
         knn: int = 10,
     ):
-        match self.registration_type, self.backend:
-            case "GICP", "small_gicp":
-                return self.align_small_gicp(
-                    raw_points, init_gt_pose, T_last_current, knn
-                )
-            case "GICP", "open3d":
-                return self.align_o3d(raw_points, init_gt_pose, T_last_current)
+        """
+        Parameters
+        ----------
+        raw_points: shape = (h*w*(3/4/6/7)
+        """
+        if self.backend == "small_gicp" and self.registration_type != "COLORED_ICP":
+            return self.align_small_gicp(raw_points, init_gt_pose, T_last_current, knn)
+        elif self.backend == "open3d":
+            return self.align_o3d(raw_points, init_gt_pose, T_last_current)
+        else:
+            raise ValueError("wrong backend type")
 
     def align_small_gicp(
         self,
@@ -229,15 +233,22 @@ class Scan2ScanICP:
 
     def align_o3d(
         self,
-        raw_points: np.ndarray,
-        init_gt_pose: np.ndarray = None,
-        T_last_current: np.ndarray = np.identity(4),
+        raw_points: NDArray[np.float64],
+        init_gt_pose: NDArray[np.float64] | None = None,
+        T_last_current: NDArray[np.float64] = np.identity(4),
     ):
 
         # 创建 Open3D 点云对象
         pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(raw_points)
-
+        pcd.points = o3d.utility.Vector3dVector(raw_points[:, :3])  # 假设前三列是 XYZ
+        if self.registration_type == "COLORED_ICP":
+            pcd.colors = o3d.utility.Vector3dVector(raw_points[:, 4:] / 255.0)
+            # Compute normals for the point cloud, which are needed for GICP and Colored ICP
+            pcd.estimate_normals(
+                search_param=o3d.geometry.KDTreeSearchParamHybrid(
+                    radius=self.max_corresponding_distance * 2, max_nn=10
+                )
+            )
         # 体素下采样
         voxel_size = self.voxel_downsampling_resolutions
         downsampled = pcd.voxel_down_sample(voxel_size)
@@ -249,15 +260,40 @@ class Scan2ScanICP:
                 init_gt_pose if init_gt_pose is not None else np.identity(4)
             )
             return self.T_world_camera
+        # selection icps
+        if self.registration_type == "GICP":
+            registration_method = (
+                o3d.pipelines.registration.registration_generalized_icp
+            )
+            estimation_method = (
+                o3d.pipelines.registration.TransformationEstimationForGeneralizedICP()
+            )
+        elif self.registration_type == "ICP":
+            registration_method = o3d.pipelines.registration.registration_icp
+            estimation_method = (
+                o3d.pipelines.registration.TransformationEstimationPointToPoint()
+            )
+        elif self.registration_type == "PLANE_ICP":
+            registration_method = o3d.pipelines.registration.registration_icp
+            estimation_method = (
+                o3d.pipelines.registration.TransformationEstimationPointToPlane()
+            )
+        elif self.registration_type == "COLORED_ICP":
+            registration_method = o3d.pipelines.registration.registration_colored_icp
+            estimation_method = (
+                o3d.pipelines.registration.TransformationEstimationForColoredICP()
+            )
+        else:
+            raise ValueError("Unsupported registration type")
 
-        # GICP 配准
-        reg = o3d.pipelines.registration.registration_generalized_icp(
-            downsampled,
-            self.previous_pcd,
-            self.max_corresponding_distance,
-            T_last_current,
+        reg = registration_method(
+            source=downsampled,
+            target=self.previous_pcd,
+            max_correspondence_distance=self.max_corresponding_distance,
+            init=T_last_current,
+            estimation_method=estimation_method,
             criteria=o3d.pipelines.registration.ICPConvergenceCriteria(
-                relative_fitness=1e-3, relative_rmse=1e-3, max_iteration=50
+                relative_fitness=1e-6, relative_rmse=1e-6, max_iteration=50
             ),
         )
 

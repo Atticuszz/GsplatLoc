@@ -6,20 +6,24 @@ from numpy.typing import NDArray
 class RGBDImage:
     def __init__(
         self,
-        # rgb: np.ndarray,
+        rgb: np.ndarray,
         depth: np.ndarray,
         K: np.ndarray,
         depth_scale: float,
         pose: NDArray[np.float64] | None = None,
     ):
-        # if rgb.shape[0] != depth.shape[0] or rgb.shape[1] != depth.shape[1]:
-        #     raise ValueError(
-        #         "RGB's height and width must match Depth's height and width."
-        #     )
-        # self.rgb = rgb
+        if rgb.shape[0] != depth.shape[0] or rgb.shape[1] != depth.shape[1]:
+            raise ValueError(
+                "RGB's height and width must match Depth's height and width."
+            )
+        self._rgb = rgb
         self._depth = depth / depth_scale
         self._K = K
         self._pose: NDArray[np.float64] | None = pose
+
+    @property
+    def color(self):
+        return self._rgb
 
     @property
     def depth(self) -> NDArray[np.float64]:
@@ -51,6 +55,51 @@ class RGBDImage:
             Camera pose matrix in world coordinates.
         """
         return self._pose
+
+    def color_pcds(
+        self,
+        colored: bool = False,  # Optional color image
+        include_homogeneous: bool = True,
+    ) -> NDArray[np.float64]:
+        """
+        Generate point clouds from depth image, optionally with color.
+
+        Parameters
+        ----------
+        colored: bool
+            if contain color
+        include_homogeneous : bool, optional
+            Whether to include homogeneous coordinate.
+
+        Returns
+        -------
+        NDArray[np.float64]
+            The generated point cloud, shape=(h*w, 4) or (h*w, 6) or (h*w, 3) or (h*w, 7) depending on options.
+        """
+        h, w = self._depth.shape[:2]
+        i_indices, j_indices = np.indices((h, w))
+
+        # Transform to camera coordinates using intrinsic matrix K
+        x = (j_indices - self._K[0, 2]) * self._depth / self._K[0, 0]
+        y = (i_indices - self._K[1, 2]) * self._depth / self._K[1, 1]
+        z = self._depth
+        points = np.stack((x, y, z), axis=-1)
+
+        # Handle the optional inclusion of the homogeneous coordinate
+        if include_homogeneous:
+            ones = np.ones((h, w, 1))
+            points = np.concatenate((points, ones), axis=-1)
+
+        # Flatten the array to make it N x (3 or 4)
+        points = points.reshape(-1, points.shape[-1])
+
+        # Handle the optional color image
+        if colored:
+            colors = self._rgb.reshape(-1, 3)  # Flatten the color array
+            # Stack the color coordinates with the points
+            points = np.concatenate((points, colors), axis=1)
+
+        return points
 
     def pointclouds(
         self, stride: int = 1, include_homogeneous=True
@@ -95,7 +144,7 @@ class RGBDImage:
         if pcd_c is None:
             points_camera = self.pointclouds()
         else:
-            points_camera = pcd_c
+            points_camera = pcd_c[:, :4]
         return points_camera @ c2w.T
 
     def _grid_downsample(self, stride: int = 1) -> tuple[

@@ -29,8 +29,17 @@ def points_left(v_ds, at_least: int = 1000):
 # TODO: downsample with different backends
 if __name__ == "__main__":
     file_path = Path("grip_o3d_finished_experiments.json")
-    methods = ["GICP"]
+    methods = [
+        "GICP",
+        "PLANE_ICP",
+        "COLORED_ICP",
+        "ICP",
+    ]
     implements = "open3d", "small_gicp"
+    # implements = (
+    #     "small_gicp",
+    #     "open3d",
+    # )
     voxel_downsampling_resolutions = [
         1,
         0.9,
@@ -70,8 +79,12 @@ if __name__ == "__main__":
         for method in methods:
             for imp in implements:
                 for v_ds in voxel_downsampling_resolutions:
-                    config_tuple = (room, method, v_ds)
+                    # skip finished
+                    config_tuple = (room, method, imp, v_ds)
                     if config_tuple in finished or v_ds in too_less_points:
+                        continue
+                    # small_gicp does not have  color icp
+                    if imp == "small_gicp" and method == "COLORED_ICP":
                         continue
                     registration_config = RegistrationConfig(
                         registration_type=method,
@@ -79,7 +92,6 @@ if __name__ == "__main__":
                         implementation=imp,
                     )
                     experiment = Experiment(
-                        name=room,
                         registration_config=registration_config,
                         wandb_config=WandbConfig(
                             method,
