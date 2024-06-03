@@ -10,7 +10,7 @@ from src.slam_data.dataset import Replica
 from src.slam_data.Image import RGBDImage
 
 
-class PointCloudProcessor(GICP):
+class PointCloudProcessor(Scan2ScanICP):
     """
     Responsibilities:
     - Visualize the aggregated point cloud  vis real-time and with the real trajectory
@@ -46,18 +46,16 @@ class PointCloudProcessor(GICP):
                 raise ValueError("Pose is not available.")
 
             self.gt_poses.append(rgbd_image.pose)
-            new_pcd = rgbd_image.pointclouds(8)
+            new_pcd = rgbd_image.pointclouds(include_homogeneous=False)
             # if not self.estimated_poses:
             #     estimate_pose = self.align_pcd(new_pcd, rgbd_image.pose)
             # else:
             #     estimate_pose = self.align_pcd(new_pcd)
             if len(self.gt_poses) < 2:
-                estimate_pose = self.align_pcd_gt_pose(new_pcd, rgbd_image.pose)
+                estimate_pose = self.align_o3d(new_pcd, rgbd_image.pose)
             else:
                 T_last_current = self.gt_poses[-1] @ np.linalg.inv(self.gt_poses[-2])
-                estimate_pose = self.align_pcd_gt_pose(
-                    new_pcd, T_last_current=T_last_current
-                )
+                estimate_pose = self.align_o3d(new_pcd, T_last_current=T_last_current)
             end = cv2.getTickCount()
             self.stamps.append((end - start) / cv2.getTickFrequency())
 
@@ -67,13 +65,13 @@ class PointCloudProcessor(GICP):
 
             if i % 30 == 0:
                 self.vis.update_render(new_pcd, estimate_pose)
-                # fps = 1 / np.mean(self.stamps)
-                # self.vis.vis_trajectory(
-                #     gt_poses=self.gt_poses,
-                #     estimated_poses=self.estimated_poses,
-                #     downsampling_resolution=self.voxel_downsampling_resolutions,
-                #     fps=fps,
-                # )
+                fps = 1 / np.mean(self.stamps)
+                self.vis.vis_trajectory(
+                    gt_poses=self.gt_poses,
+                    estimated_poses=self.estimated_poses,
+                    downsampling_resolution=self.voxel_downsampling_resolutions,
+                    fps=fps,
+                )
         self.vis.close()
 
     #     if save:

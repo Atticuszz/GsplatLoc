@@ -177,10 +177,11 @@ class RegistrationConfig(NamedTuple):
     max_corresponding_distance: float = 0.1
     num_threads: int = 32
     registration_type: Literal["ICP", "PLANE_ICP", "GICP", "VGICP"] = "GICP"
+    implementation: Literal["small_gicp", "open3d"] = "small_gicp"
     voxel_downsampling_resolutions: float | None = None
-    grid_downsample_resolution: int | None = None
-    # for gicp estimate normals and covs
-    knn: int = 20
+    # grid_downsample_resolution: int | None = None
+    # for gicp estimate normals and covs 10 is the best after tests
+    # knn: int = 10
 
     def as_dict(self):
         return {key: val for key, val in self._asdict().items() if val is not None}
@@ -188,7 +189,6 @@ class RegistrationConfig(NamedTuple):
 
 class WandbConfig(NamedTuple):
     algorithm: str = "GICP"
-    implementation: str = "small_gicp"
     dataset: str = "Replica"
     sub_set: str = "office0"
     description: str = "GICP on Replica dataset"
@@ -199,6 +199,7 @@ class Experiment:
         self,
         name: str,
         registration_config: RegistrationConfig,
+        wandb_config: WandbConfig,
         extra_config: dict = None,
     ):
         self.data: DataLoaderBase = Replica(name)
@@ -210,10 +211,10 @@ class Experiment:
         )
         if extra_config is None:
             extra_config = {}
-        wandb_config = registration_config.as_dict()
-        wandb_config.update({"name": name, **extra_config})
-        self.grid_downsample = registration_config.grid_downsample_resolution
-        self.knn = registration_config.knn
+        wandb_config = wandb_config._asdict()
+        wandb_config.update({**registration_config.as_dict(), **extra_config})
+        # self.grid_downsample = registration_config.grid_downsample_resolution
+        # self.knn = registration_config.knn
         self.logger = WandbLogger(run_name=name, config=wandb_config)
 
     def run(self, max_images: int = 2000):
@@ -231,23 +232,21 @@ class Experiment:
             pre_pose = rgbd_image.pose
 
             # NOTE: down sample
-            new_pcd = rgbd_image.pointclouds(self.grid_downsample)
+            new_pcd = rgbd_image.pointclouds()
 
             # NOTE: align interface
             if i == 0:
-                res = self.backends.align_pcd_gt_pose(
-                    new_pcd, rgbd_image.pose, knn=self.knn
-                )
+                # res = self.backends.align(new_pcd, rgbd_image.pose, knn=self.knn)
+                res = self.backends.align(new_pcd, rgbd_image.pose)
                 continue
             else:
                 T_last_current = rgbd_image.pose @ np.linalg.inv(pre_pose)
-                res = self.backends.align_pcd_gt_pose(
-                    new_pcd, T_last_current, knn=self.knn
-                )
+                # res = self.backends.align(new_pcd, T_last_current, knn=self.knn)
+                res = self.backends.align(new_pcd, T_last_current)
 
             # NOTE: align data
-            self.logger.log_align_error(res.error, i)
-            self.logger.log_iter_times(res.iterations, i)
+            # self.logger.log_align_error(res.error, i)
+            # self.logger.log_iter_times(res.iterations, i)
             # NOTE: eT
             est_pose = self.backends.T_world_camera
             eT = calculate_translation_error(est_pose, rgbd_image.pose)

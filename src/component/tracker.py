@@ -4,9 +4,9 @@ import numpy as np
 import small_gicp
 from numpy.typing import NDArray
 
-from src.gicp.optimizer import lm_optimize
+# from ..gicp.optimizer import lm_optimize
 from src.gicp.pcd import PointClouds
-
+import open3d as o3d
 
 # TODO: add registration base class and registration result class
 
@@ -47,10 +47,11 @@ class Scan2ScanICP:
 
     def __init__(
         self,
-        voxel_downsampling_resolutions=0.01,  # Adjusted for potentially denser point clouds from depth images
+        voxel_downsampling_resolutions=0.1,  # Adjusted for potentially denser point clouds from depth images
         max_corresponding_distance=0.1,
         num_threads=32,
         registration_type: Literal["ICP", "PLANE_ICP", "GICP", "VGICP"] = "GICP",
+        implementation: Literal["small_gicp", "open3d"] = "small_gicp",
         error_threshold: float = 50.0,
     ):
 
@@ -66,6 +67,7 @@ class Scan2ScanICP:
         # every frame pose
         self.T_world_camera = np.identity(4)  # World to camera transformation
         self.registration_type = registration_type
+        self.backend = implementation
 
         # less than min for skipping mapping, greater than as kf
         self.error_threshold = error_threshold
@@ -164,8 +166,23 @@ class Scan2ScanICP:
         print(f"not kf factor error: {result.error}")
         return False
 
-    #
-    def align_pcd_gt_pose(
+    # NOTE: following is the align_pcd_gt_pose with true T_last_current estimate
+    def align(
+        self,
+        raw_points: NDArray[np.float64],
+        init_gt_pose: NDArray[np.float64] | None = None,
+        T_last_current: NDArray[np.float64] = np.identity(4),
+        knn: int = 10,
+    ):
+        match self.registration_type, self.backend:
+            case "GICP", "small_gicp":
+                return self.align_small_gicp(
+                    raw_points, init_gt_pose, T_last_current, knn
+                )
+            case "GICP", "open3d":
+                return self.align_o3d(raw_points, init_gt_pose, T_last_current)
+
+    def align_small_gicp(
         self,
         raw_points: NDArray[np.float64],
         init_gt_pose: NDArray[np.float64] | None = None,
@@ -209,3 +226,45 @@ class Scan2ScanICP:
 
         return self.T_world_camera
         # return result
+
+    def align_o3d(
+        self,
+        raw_points: np.ndarray,
+        init_gt_pose: np.ndarray = None,
+        T_last_current: np.ndarray = np.identity(4),
+    ):
+
+        # 创建 Open3D 点云对象
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(raw_points)
+
+        # 体素下采样
+        voxel_size = self.voxel_downsampling_resolutions
+        downsampled = pcd.voxel_down_sample(voxel_size)
+
+        # 如果是第一帧，初始化
+        if self.previous_pcd is None:
+            self.previous_pcd = downsampled
+            self.T_world_camera = (
+                init_gt_pose if init_gt_pose is not None else np.identity(4)
+            )
+            return self.T_world_camera
+
+        # GICP 配准
+        reg = o3d.pipelines.registration.registration_generalized_icp(
+            downsampled,
+            self.previous_pcd,
+            self.max_corresponding_distance,
+            T_last_current,
+            criteria=o3d.pipelines.registration.ICPConvergenceCriteria(
+                relative_fitness=1e-3, relative_rmse=1e-3, max_iteration=50
+            ),
+        )
+
+        # 更新世界变换矩阵
+        self.T_world_camera = self.T_world_camera @ reg.transformation
+
+        # 更新前一帧的点云
+        self.previous_pcd = downsampled
+
+        return self.T_world_camera

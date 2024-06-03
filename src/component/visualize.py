@@ -37,7 +37,8 @@ class PcdVisualizer:
         new_pcd: NDArray[np.float64],
         estimate_pose: NDArray[np.float64],
     ):
-        new_pcd = o3d.utility.Vector3dVector(new_pcd[:, :3])
+        # new_pcd = o3d.utility.Vector3dVector(new_pcd[:, :3])
+        new_pcd = o3d.utility.Vector3dVector(new_pcd)
         pcd_o3d = o3d.geometry.PointCloud(new_pcd)
         # pcd_o3d.paint_uniform_color([0.5, 0.5, 0.5])
         pcd_o3d.transform(estimate_pose)

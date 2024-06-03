@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from src.component.eval import Experiment, RegistrationConfig
+from src.component.eval import Experiment, RegistrationConfig, WandbConfig
 
 
 def load_finished_experiments(file_path: Path):
@@ -18,7 +18,7 @@ def save_finished_experiment(file_path: Path, finished: tuple):
         file.write(json.dumps(finished) + "\n")
 
 
-def points_left(v_ds, at_least: int = 500):
+def points_left(v_ds, at_least: int = 1000):
 
     left = v_ds * 1200 * 680
     if left < at_least:
@@ -28,8 +28,9 @@ def points_left(v_ds, at_least: int = 500):
 
 # TODO: downsample with different backends
 if __name__ == "__main__":
-    file_path = Path("grip_ds_finished_experiments.json")
+    file_path = Path("grip_o3d_finished_experiments.json")
     methods = ["GICP"]
+    implements = "open3d", "small_gicp"
     voxel_downsampling_resolutions = [
         1,
         0.9,
@@ -47,8 +48,6 @@ if __name__ == "__main__":
         0.1,
         0.05,
         0.01,
-        0.001,
-        0.0001,
     ]
     voxel_downsampling_resolutions.reverse()
     # filter too less
@@ -56,9 +55,6 @@ if __name__ == "__main__":
     for v_ds in voxel_downsampling_resolutions:
         if points_left(v_ds):
             too_less_points.append(v_ds)
-    # select knn with
-    knns = [10, 20, 30, 40, 50]
-
     rooms = ["room" + str(i) for i in range(3)] + ["office" + str(i) for i in range(5)]
 
     # finished = [
@@ -72,20 +68,24 @@ if __name__ == "__main__":
     finished = load_finished_experiments(file_path)
     for room in rooms:
         for method in methods:
-            for v_ds in voxel_downsampling_resolutions:
-                for knn in knns:
-                    config_tuple = (room, method, v_ds, knn)
+            for imp in implements:
+                for v_ds in voxel_downsampling_resolutions:
+                    config_tuple = (room, method, v_ds)
                     if config_tuple in finished or v_ds in too_less_points:
                         continue
                     registration_config = RegistrationConfig(
                         registration_type=method,
                         voxel_downsampling_resolutions=v_ds,
-                        grid_downsample_resolution=1,
-                        knn=knn,
+                        implementation=imp,
                     )
                     experiment = Experiment(
                         name=room,
                         registration_config=registration_config,
+                        wandb_config=WandbConfig(
+                            method,
+                            sub_set=room,
+                            description="small_gicp and o3d gcip for test voxel dowmsample influence for accuracy",
+                        ),
                     )
                     experiment.run()
                     save_finished_experiment(file_path, config_tuple)
