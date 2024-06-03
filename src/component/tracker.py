@@ -170,12 +170,14 @@ class Scan2ScanICP:
         raw_points: NDArray[np.float64],
         init_gt_pose: NDArray[np.float64] | None = None,
         T_last_current: NDArray[np.float64] = np.identity(4),
+        knn: int = 10,
     ):
         # down sample the point cloud
         downsampled, tree = small_gicp.preprocess_points(
             raw_points,
             self.voxel_downsampling_resolutions,
             num_threads=self.num_threads,
+            num_neighbors=knn,
         )
 
         # first frame

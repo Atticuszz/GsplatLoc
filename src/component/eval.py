@@ -179,6 +179,8 @@ class RegistrationConfig(NamedTuple):
     registration_type: Literal["ICP", "PLANE_ICP", "GICP", "VGICP"] = "GICP"
     voxel_downsampling_resolutions: float | None = None
     grid_downsample_resolution: int | None = None
+    # for gicp estimate normals and covs
+    knn: int = 20
 
     def as_dict(self):
         return {key: val for key, val in self._asdict().items() if val is not None}
@@ -211,6 +213,7 @@ class Experiment:
         wandb_config = registration_config.as_dict()
         wandb_config.update({"name": name, **extra_config})
         self.grid_downsample = registration_config.grid_downsample_resolution
+        self.knn = registration_config.knn
         self.logger = WandbLogger(run_name=name, config=wandb_config)
 
     def run(self, max_images: int = 2000):
@@ -232,11 +235,15 @@ class Experiment:
 
             # NOTE: align interface
             if i == 0:
-                res = self.backends.align_pcd_gt_pose(new_pcd, rgbd_image.pose)
+                res = self.backends.align_pcd_gt_pose(
+                    new_pcd, rgbd_image.pose, knn=self.knn
+                )
                 continue
             else:
                 T_last_current = rgbd_image.pose @ np.linalg.inv(pre_pose)
-                res = self.backends.align_pcd_gt_pose(new_pcd, T_last_current)
+                res = self.backends.align_pcd_gt_pose(
+                    new_pcd, T_last_current, knn=self.knn
+                )
 
             # NOTE: align data
             self.logger.log_align_error(res.error, i)
