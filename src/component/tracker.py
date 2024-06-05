@@ -1,12 +1,12 @@
 from typing import Literal
 
 import numpy as np
+import open3d as o3d
 import small_gicp
 from numpy.typing import NDArray
 
 # from ..gicp.optimizer import lm_optimize
 from src.gicp.pcd import PointClouds
-import open3d as o3d
 
 # TODO: add registration base class and registration result class
 
@@ -244,11 +244,7 @@ class Scan2ScanICP:
         if self.registration_type == "COLORED_ICP":
             pcd.colors = o3d.utility.Vector3dVector(raw_points[:, 4:] / 255.0)
             # Compute normals for the point cloud, which are needed for GICP and Colored ICP
-            pcd.estimate_normals(
-                search_param=o3d.geometry.KDTreeSearchParamHybrid(
-                    radius=self.max_corresponding_distance * 2, max_nn=10
-                )
-            )
+        pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamKNN(knn=10))
         # 体素下采样
         voxel_size = self.voxel_downsampling_resolutions
         downsampled = pcd.voxel_down_sample(voxel_size)
@@ -293,7 +289,7 @@ class Scan2ScanICP:
             init=T_last_current,
             estimation_method=estimation_method,
             criteria=o3d.pipelines.registration.ICPConvergenceCriteria(
-                relative_fitness=1e-6, relative_rmse=1e-6, max_iteration=50
+                relative_fitness=1e-6, relative_rmse=1e-6, max_iteration=100
             ),
         )
 

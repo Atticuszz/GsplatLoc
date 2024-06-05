@@ -1,4 +1,4 @@
-from src.component.eval import Experiment, RegistrationConfig
+from src.component.eval import Experiment
 
 # TODO: downsample with different backends
 if __name__ == "__main__":

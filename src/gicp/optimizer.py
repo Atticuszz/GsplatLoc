@@ -1,15 +1,11 @@
 from typing import NamedTuple
 
-
 import torch
-
 from torch import Tensor
 
-from .factor import (
-    compute_geometric_residuals,
-)
-from .pcd import PointClouds
 from ..utils import to_tensor
+from .factor import compute_geometric_residuals
+from .pcd import PointClouds
 
 
 def color_error(source_lab, target_lab):
@@ -95,7 +91,6 @@ class LevenbergMarquardtOptimizer:
                 self._lambda *= self._lambda_factor
 
             # TODO: Check for convergence
-            pass
 
     def _error(
         self,

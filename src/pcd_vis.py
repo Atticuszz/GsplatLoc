@@ -5,7 +5,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from component import PcdVisualizer
-from component.tracker import Scan2ScanICP, GICP
+from component.tracker import Scan2ScanICP
 from src.slam_data.dataset import Replica
 from src.slam_data.Image import RGBDImage
 

@@ -1,4 +1,3 @@
-import cv2
 import numpy as np
 import small_gicp
 from numpy.typing import NDArray

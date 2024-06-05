@@ -49,7 +49,7 @@ def show_filter_diff(
 # NOTE: test funcs
 def bilateralFilter(depth: NDArray[np.float64]):
     original_depth = depth.astype(np.float32)
-    # normalize depth to 0-1 fo better filtering
+    # normalize depth to 0-1 for better filtering
     normalized_depth = depth / depth.max()
 
     filtered_image = cv2.bilateralFilter(

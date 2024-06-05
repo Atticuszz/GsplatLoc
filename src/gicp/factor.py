@@ -3,8 +3,8 @@ import torch
 from numpy.typing import NDArray
 from torch import Tensor
 
-from .pcd import PointClouds
 from ..utils import to_tensor
+from .pcd import PointClouds
 
 
 def compute_geometric_residuals(
