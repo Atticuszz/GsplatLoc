@@ -10,3 +10,4 @@
 5. [x] build depth_loss for model
 6. [ ] build silhoutte_loss and color loss(or lab loss) for model
 7. [ ] test for icps as 4 init params
+8.［ ］try L-BFGS 
