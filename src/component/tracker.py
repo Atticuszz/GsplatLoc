@@ -47,8 +47,9 @@ class Scan2ScanICP:
 
     def __init__(
         self,
-        voxel_downsampling_resolutions=0.1,  # Adjusted for potentially denser point clouds from depth images
         max_corresponding_distance=0.1,
+        voxel_downsampling_resolutions: float = 0.0,
+        knn: int = 20,
         num_threads=32,
         registration_type: Literal["ICP", "PLANE_ICP", "GICP", "COLORED_ICP"] = "GICP",
         implementation: Literal["small_gicp", "open3d"] = "small_gicp",
@@ -77,6 +78,8 @@ class Scan2ScanICP:
         self.kf_pcd: small_gicp.PointCloud | None = None
         self.kf_tree: small_gicp.KdTree | None = None
         self.kf_T_last_current = np.identity(4)
+
+        self.knn = knn
 
     def align_pcd(
         self,
@@ -172,7 +175,6 @@ class Scan2ScanICP:
         raw_points: NDArray[np.float64],
         init_gt_pose: NDArray[np.float64] | None = None,
         T_last_current: NDArray[np.float64] = np.identity(4),
-        knn: int = 10,
     ):
         """
         Parameters
@@ -180,9 +182,11 @@ class Scan2ScanICP:
         raw_points: shape = (h*w*(3/4/6/7)
         """
         if self.backend == "small_gicp" and self.registration_type != "COLORED_ICP":
-            return self.align_small_gicp(raw_points, init_gt_pose, T_last_current, knn)
+            return self.align_small_gicp(
+                raw_points, init_gt_pose, T_last_current, self.knn
+            )
         elif self.backend == "open3d":
-            return self.align_o3d(raw_points, init_gt_pose, T_last_current)
+            return self.align_o3d(raw_points, init_gt_pose, T_last_current, self.knn)
         else:
             raise ValueError("wrong backend type")
 
@@ -191,16 +195,25 @@ class Scan2ScanICP:
         raw_points: NDArray[np.float64],
         init_gt_pose: NDArray[np.float64] | None = None,
         T_last_current: NDArray[np.float64] = np.identity(4),
-        knn: int = 10,
+        knn: int = 20,
     ):
         # down sample the point cloud
-        downsampled, tree = small_gicp.preprocess_points(
-            raw_points,
-            self.voxel_downsampling_resolutions,
-            num_threads=self.num_threads,
-            num_neighbors=knn,
-        )
-
+        if self.voxel_downsampling_resolutions > 0.0:
+            downsampled, tree = small_gicp.preprocess_points(
+                raw_points,
+                self.voxel_downsampling_resolutions,
+                num_threads=self.num_threads,
+                num_neighbors=knn,
+            )
+        elif self.voxel_downsampling_resolutions == 0.0:
+            raw_points = small_gicp.PointCloud(raw_points)
+            tree = small_gicp.KdTree(raw_points, num_threads=self.num_threads)
+            small_gicp.estimate_normals_covariances(
+                raw_points, tree, num_neighbors=knn, num_threads=self.num_threads
+            )
+            downsampled = raw_points
+        else:
+            raise ValueError("voxel_downsampling_resolutions must greater than 0.0")
         # first frame
         if self.previous_pcd is None:
             self.previous_pcd = downsampled
@@ -236,6 +249,7 @@ class Scan2ScanICP:
         raw_points: NDArray[np.float64],
         init_gt_pose: NDArray[np.float64] | None = None,
         T_last_current: NDArray[np.float64] = np.identity(4),
+        knn: int = 20,
     ):
 
         # 创建 Open3D 点云对象
@@ -244,10 +258,15 @@ class Scan2ScanICP:
         if self.registration_type == "COLORED_ICP":
             pcd.colors = o3d.utility.Vector3dVector(raw_points[:, 4:] / 255.0)
             # Compute normals for the point cloud, which are needed for GICP and Colored ICP
-        pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamKNN(knn=10))
+        pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamKNN(knn=knn))
+
         # 体素下采样
-        voxel_size = self.voxel_downsampling_resolutions
-        downsampled = pcd.voxel_down_sample(voxel_size)
+        if self.voxel_downsampling_resolutions > 0.0:
+            downsampled = pcd.voxel_down_sample(self.voxel_downsampling_resolutions)
+        elif self.voxel_downsampling_resolutions == 0.0:
+            downsampled = pcd
+        else:
+            raise ValueError("voxel_downsampling_resolutions must greater than 0.0")
 
         # 如果是第一帧，初始化
         if self.previous_pcd is None:

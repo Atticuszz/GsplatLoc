@@ -7,12 +7,12 @@ from src.eval.utils import calculate_rotation_error, calculate_translation_error
 from src.slam_data import Replica, RGBDImage
 from src.utils import to_tensor
 
-device = (
+DEVICE = (
     "cuda"
     if torch.cuda.is_available()
     else "mps" if torch.backends.mps.is_available() else "cpu"
 )
-print(f"Using {device} device")
+print(f"Using {DEVICE} DEVICE")
 
 
 class PoseEstimationModel(nn.Module):
@@ -145,8 +145,8 @@ def train_model(
     num_iterations=20,
     learning_rate=1e-6,
 ) -> tuple[float, Tensor]:
-    init_pose = to_tensor(tar_rgb_d.pose, device)
-    model = PoseEstimationModel(K, init_pose, device)
+    init_pose = to_tensor(tar_rgb_d.pose, DEVICE)
+    model = PoseEstimationModel(K, init_pose, DEVICE)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5)
     # result
@@ -154,8 +154,8 @@ def train_model(
     best_pose = init_pose.clone()
     for i in range(num_iterations):
         optimizer.zero_grad()
-        depth_last = to_tensor(tar_rgb_d.depth, device)
-        depth_current = to_tensor(src_rgb_d.depth, device)
+        depth_last = to_tensor(tar_rgb_d.depth, DEVICE)
+        depth_current = to_tensor(src_rgb_d.depth, DEVICE)
         loss = model(depth_last, depth_current)
         loss.backward()
         optimizer.step()
@@ -172,7 +172,7 @@ def train_model(
 
 def eval():
     tar_rgb_d, src_rgb_d = Replica()[0], Replica()[1]
-    _, estimate_pose = train_model(tar_rgb_d, src_rgb_d, to_tensor(tar_rgb_d.K, device))
+    _, estimate_pose = train_model(tar_rgb_d, src_rgb_d, to_tensor(tar_rgb_d.K, DEVICE))
 
     eT = calculate_translation_error(
         estimate_pose.detach().cpu().numpy(), tar_rgb_d.pose

@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from src.eval.experiment import DepthLossExperiment, WandbConfig
+from src.eval.experiment import ICPExperiment, RegistrationConfig, WandbConfig
 
 
 def load_finished_experiments(file_path: Path):
@@ -18,16 +18,24 @@ def save_finished_experiment(file_path: Path, finished: tuple):
         file.write(json.dumps(finished) + "\n")
 
 
-# TODO: downsample with different backends
 if __name__ == "__main__":
+
     file_path = Path("grip_o3d_finished_experiments.json")
-    methods = ["depth_loss"]
-    implements = "pytorch"
-    num_iters = 20
-    learning_rate = 1e-6
+    methods = [
+        "GICP",
+        "PLANE_ICP",
+        "COLORED_ICP",
+        "ICP",
+    ]
+    implements = (
+        "small_gicp",
+        "open3d",
+    )
+
     rooms = ["room" + str(i) for i in range(3)] + ["office" + str(i) for i in range(5)]
 
     finished = load_finished_experiments(file_path)
+
     for room in rooms:
         for method in methods:
             for imp in implements:
@@ -35,14 +43,21 @@ if __name__ == "__main__":
                 config_tuple = (room, method, imp)
                 if config_tuple in finished:
                     continue
-
-                experiment = DepthLossExperiment(
+                # small_gicp does not have  color icp
+                if imp == "small_gicp" and method == "COLORED_ICP":
+                    continue
+                registration_config = RegistrationConfig(
+                    registration_type=method,
+                    voxel_downsampling_resolutions=0.0,
+                    # knn=20,
+                )
+                experiment = ICPExperiment(
+                    registration_config=registration_config,
                     wandb_config=WandbConfig(
                         method,
                         sub_set=room,
-                        num_iters=num_iters,
-                        learning_rate=learning_rate,
-                        description="depth_loss for pose estimation",
+                        implementation=imp,
+                        description="icps test for accuracy",
                     ),
                 )
                 experiment.run()

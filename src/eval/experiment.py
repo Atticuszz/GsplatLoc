@@ -11,7 +11,7 @@ from src.eval.utils import (
     calculate_translation_error,
     diff_pcd_COM,
 )
-from src.gicp.depth_loss import train_model
+from src.gicp.depth_loss import train_model, DEVICE
 from src.slam_data import Replica, RGBDImage
 from src.slam_data.dataset import DataLoaderBase
 from src.utils import to_tensor
@@ -21,7 +21,6 @@ class RegistrationConfig(NamedTuple):
     max_corresponding_distance: float = 0.1
     num_threads: int = 32
     registration_type: Literal["ICP", "PLANE_ICP", "GICP", "COLORED_ICP"] = ("GICP",)
-    implementation: Literal["small_gicp", "open3d"] = "small_gicp"
     voxel_downsampling_resolutions: float | None = None
     # grid_downsample_resolution: int | None = None
     # for gicp estimate normals and covs 10 is the best after tests
@@ -36,6 +35,7 @@ class WandbConfig(NamedTuple):
     dataset: str = "Replica"
     sub_set: str = "office0"
     description: str = "GICP on Replica dataset"
+    implementation: str | None = None
     num_iters: int | None = None
     learning_rate: float | None = None
 
@@ -95,7 +95,7 @@ class ICPExperiment(ExperimentBase):
 
             # NOTE: align interface
             if i == 0:
-                res = self.backends.align(new_pcd, rgbd_image.pose, knn=self.knn)
+                # res = self.backends.align(new_pcd, rgbd_image.pose)
                 res = self.backends.align(new_pcd, rgbd_image.pose)
                 continue
             else:
@@ -126,13 +126,9 @@ class ICPExperiment(ExperimentBase):
 
 class DepthLossExperiment(ExperimentBase):
 
-    def __init__(
-        self,
-        wandb_config: WandbConfig,
-    ):
+    def __init__(self, wandb_config: WandbConfig):
         super().__init__(
-            backends=train_model,
-            wandb_config=wandb_config,
+            backends=train_model, wandb_config=wandb_config, extra_config=kwargs
         )
         self.num_iters = wandb_config.num_iters
         self.learning_rate = wandb_config.learning_rate
@@ -158,7 +154,7 @@ class DepthLossExperiment(ExperimentBase):
                 min_loss, pose = self.backends(
                     self.data[i - 1],
                     rgbd_image,
-                    to_tensor(self.data.K, device="cuda"),
+                    to_tensor(self.data.K, device=DEVICE),
                     num_iterations=self.num_iters,
                     learning_rate=self.learning_rate,
                 )
