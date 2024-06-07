@@ -68,56 +68,14 @@ def depth_to_colormap(depth_image: NDArray):
     return depth_colormap
 
 
-# @jit(nopython=True, parallel=True)
-# def compute_error(
-#     points1: NDArray[np.float64],
-#     covs1: list[NDArray[np.float64]],
-#     points2: NDArray[np.float64],
-#     covs2: list[NDArray[np.float64]],
-#     T: NDArray[np.float64],
-# ) -> float:
-#     """
-#     Calculate the Mahalanobis distance error between two point clouds where points are in homogeneous coordinates.
-#
-#     Parameters:
-#     points1 : Points from the first point cloud in homogeneous coordinates, shape (n_points, 4).
-#     covs1 : Covariance matrices for the first point cloud, shape (n_points, 3, 3).
-#     points2 : Points from the second point cloud in homogeneous coordinates, shape (n_points, 4).
-#     covs2 : Covariance matrices for the second point cloud, shape (n_points, 3, 3).
-#     T : Transformation matrix from the first point cloud to the second, shape (4, 4).
-#
-#     Returns:
-#     total_error: The total calculated error.
-#     """
-#     total_error = 0.0
-#     n_points = points1.shape[0]
-#
-#     for i in prange(n_points):
-#         transformed_point = np.dot(T, np.append(points1[i, :3], 1))[:3]
-#         residual = points2[i, :3] - transformed_point
-#         RCR = covs2[i] + np.dot(np.dot(T[:3, :3], covs1[i]), T[:3, :3].T)
-#
-#         # Ensure RCR is contiguous
-#         RCR = np.ascontiguousarray(RCR)
-#
-#         det_RCR = np.linalg.det(RCR)
-#         if det_RCR != 0:
-#             inv_RCR = np.linalg.inv(RCR)
-#             mahalanobis_distance = np.dot(residual, np.dot(inv_RCR, residual))
-#             total_error += mahalanobis_distance
-#         else:
-#             # Handle the non-invertible case or log a warning
-#             print("Warning: Non-invertible covariance matrix encountered.")
-#
-#     return total_error
-
-
 def to_tensor(
-    data: NDArray[np.float64] | list[float], device: torch.device = torch.device("cpu")
+    data: NDArray[np.float64] | list[float], device, requires_grad: bool = False
 ) -> torch.Tensor:
     """
     Convert numpy array to pytorch tensor.
     """
     if isinstance(data, list):
         data = np.array(data)
-    return torch.tensor(data, dtype=torch.float64, device=device)
+    return torch.tensor(
+        data, dtype=torch.float64, device=device, requires_grad=requires_grad
+    )

@@ -6,8 +6,10 @@ from matplotlib import pyplot as plt
 
 from component import PcdVisualizer
 from component.tracker import Scan2ScanICP
+from src.gicp.depth_loss import train_model
 from src.slam_data.dataset import Replica
 from src.slam_data.Image import RGBDImage
+from src.utils import to_tensor
 
 
 class PointCloudProcessor(Scan2ScanICP):
@@ -52,10 +54,18 @@ class PointCloudProcessor(Scan2ScanICP):
             # else:
             #     estimate_pose = self.align_pcd(new_pcd)
             if len(self.gt_poses) < 2:
-                estimate_pose = self.align_o3d(new_pcd, rgbd_image.pose)
+                # estimate_pose = self.align_o3d(new_pcd, rgbd_image.pose)
+                estimate_pose = rgbd_image.pose
             else:
-                T_last_current = self.gt_poses[-1] @ np.linalg.inv(self.gt_poses[-2])
-                estimate_pose = self.align_o3d(new_pcd, T_last_current=T_last_current)
+                # T_last_current = self.gt_poses[-1] @ np.linalg.inv(self.gt_poses[-2])
+                # estimate_pose = self.align_o3d(new_pcd, T_last_current=T_last_current)
+                _, estimate_pose = train_model(
+                    self.data_loader[i - 1],
+                    rgbd_image,
+                    to_tensor(self.data_loader.K, device="cuda"),
+                    num_iterations=2,
+                )
+                estimate_pose = estimate_pose.detach().cpu().numpy()
             end = cv2.getTickCount()
             self.stamps.append((end - start) / cv2.getTickFrequency())
 
@@ -63,7 +73,7 @@ class PointCloudProcessor(Scan2ScanICP):
             # kf = self.keyframe()
             # if kf:
 
-            if i % 30 == 0:
+            if i % 5 == 0:
                 self.vis.update_render(new_pcd, estimate_pose)
                 fps = 1 / np.mean(self.stamps)
                 self.vis.vis_trajectory(

@@ -1,8 +1,9 @@
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
+from torch import Tensor, nn
 
-from src.component.eval import calculate_translation_error, calculate_rotation_error
+from src.eval.utils import calculate_rotation_error, calculate_translation_error
 from src.slam_data import Replica, RGBDImage
 from src.utils import to_tensor
 
@@ -14,7 +15,7 @@ device = (
 print(f"Using {device} device")
 
 
-class CameraPoseEstimator:
+class PoseEstimationModel(nn.Module):
     """
     Initialize the CameraPoseEstimator with camera intrinsics and computation device.
 
@@ -26,9 +27,51 @@ class CameraPoseEstimator:
         The device on which to perform computations ('cpu' or 'cuda'). Default is 'cpu'.
     """
 
-    def __init__(self, intrinsics, device="cuda"):
+    def __init__(self, intrinsics: Tensor, init_pose: Tensor, device="cuda"):
+        super().__init__()
         self.intrinsics = intrinsics
+        self.pose_last = init_pose
+        self.pose_cur = nn.Parameter(init_pose)
         self.device = device
+
+    def forward(self, depth_last, depth_current):
+        """
+        Parameters
+        ----------
+        depth_last : torch.Tensor
+            The depth image from the previous frame with dimensions [height, width].
+        depth_current : torch.Tensor
+            The depth image from the current frame with dimensions [height, width].
+        Returns
+        -------
+        loss: torch.Tensor
+            The loss value.
+        """
+        # depth to pcd
+        pcd_last = self.depth_to_pointcloud(depth_last, self.pose_last)
+        pcd_current = self.depth_to_pointcloud(depth_current, self.pose_cur)
+
+        # projected to depth
+        projected_depth_last = self.pointcloud_to_depth(pcd_last, self.pose_cur)
+        projected_depth_current = self.pointcloud_to_depth(pcd_current, self.pose_cur)
+
+        # combined
+        combined_projected_depth = torch.min(
+            projected_depth_last, projected_depth_current
+        )
+        combined_projected_depth[combined_projected_depth == 0] = torch.max(
+            projected_depth_last, projected_depth_current
+        )[combined_projected_depth == 0]
+
+        # Calculate MSE loss
+        mse_loss = F.mse_loss(combined_projected_depth, depth_current)
+
+        # Regularization term: penalize large changes in the pose
+        reg_loss = torch.sum((self.pose_cur - self.pose_last) ** 2)
+
+        # Combine losses
+        loss = mse_loss + 0.001 * reg_loss  # Adjust regularization weight as needed
+        return loss
 
     def depth_to_pointcloud(self, depth, pose):
         """
@@ -94,77 +137,42 @@ class CameraPoseEstimator:
 
         return projected_depth
 
-    def optimize_pose(
-        self,
-        depth_last,
-        pose_last,
-        depth_current,
-        num_iterations=500,
-        learning_rate=1e-3,
-    ):
-        """
-        Optimizes the camera pose by minimizing the difference between the projected and actual depth images.
 
-        Parameters
-        ----------
-        depth_last : torch.Tensor
-            The depth image from the previous frame with dimensions [height, width].
-        pose_last : torch.Tensor
-            The initial estimate of the pose as a 4x4 transformation matrix.
-        depth_current : torch.Tensor
-            The depth image from the current frame with dimensions [height, width].
-        num_iterations : int, optional
-            The number of iterations to run the optimization for. Default is 100.
-        learning_rate : float, optional
-            The learning rate for the optimizer. Default is 0.01.
+def train_model(
+    tar_rgb_d: RGBDImage,
+    src_rgb_d: RGBDImage,
+    K: Tensor,
+    num_iterations=20,
+    learning_rate=1e-6,
+) -> tuple[float, Tensor]:
+    init_pose = to_tensor(tar_rgb_d.pose, device)
+    model = PoseEstimationModel(K, init_pose, device)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5)
+    # result
+    min_loss = float("inf")
+    best_pose = init_pose.clone()
+    for i in range(num_iterations):
+        optimizer.zero_grad()
+        depth_last = to_tensor(tar_rgb_d.depth, device)
+        depth_current = to_tensor(src_rgb_d.depth, device)
+        loss = model(depth_last, depth_current)
+        loss.backward()
+        optimizer.step()
 
-        Returns
-        -------
-        torch.Tensor
-            The optimized pose as a 4x4 transformation matrix.
-        """
-        optimizer = optim.Adam([pose_last], lr=learning_rate)
+        if loss.item() < min_loss:
+            min_loss = loss.item()
+            best_pose = model.pose_cur.clone()
 
-        for iteration in range(num_iterations):
-            optimizer.zero_grad()
-            # u,v,pcd
-            pcd_last = self.depth_to_pointcloud(depth_last, pose_last)
-            pcd_current = self.depth_to_pointcloud(depth_current, pose_last)
-
-            # projected
-            projected_depth_last = self.pointcloud_to_depth(pcd_last, pose_last)
-            projected_depth_current = self.pointcloud_to_depth(pcd_current, pose_last)
-
-            # combined with closed pcd
-            combined_projected_depth = torch.min(
-                projected_depth_last, projected_depth_current
-            )
-            combined_projected_depth[combined_projected_depth == 0] = torch.max(
-                projected_depth_last, projected_depth_current
-            )[combined_projected_depth == 0]
-
-            # update pose
-            loss = F.mse_loss(combined_projected_depth, depth_current)
-            loss.backward()
-            optimizer.step()
-
-            if iteration % 10 == 0:
-                print(f"Iteration {iteration}: Loss {loss.item()}")
-
-        return pose_last
+        # if i % 10 == 0:
+        #     print(f"Iteration {i}: Loss {min_loss}")
+        # scheduler.step()
+    return min_loss, best_pose
 
 
 def eval():
     tar_rgb_d, src_rgb_d = Replica()[0], Replica()[1]
-    src_rgb_d: RGBDImage
-    tar_rgb_d: RGBDImage
-    tracker = CameraPoseEstimator(to_tensor(src_rgb_d.K, device), device)
-
-    estimate_pose = tracker.optimize_pose(
-        to_tensor(src_rgb_d.depth, device),
-        to_tensor(src_rgb_d.pose, device, requires_grad=True),
-        to_tensor(tar_rgb_d.depth, device),
-    )
+    _, estimate_pose = train_model(tar_rgb_d, src_rgb_d, to_tensor(tar_rgb_d.K, device))
 
     eT = calculate_translation_error(
         estimate_pose.detach().cpu().numpy(), tar_rgb_d.pose

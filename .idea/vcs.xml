@@ -4,5 +4,9 @@
     <mapping directory="" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/thirdparty/AB_GICP_c" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/thirdparty/small_gicp" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/thirdparty/torchimize" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../Gaussian-SLAM" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../SplaTAM" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../SplaTAM/diff-gaussian-rasterization-w-depth.git" vcs="Git" />
   </component>
 </project>

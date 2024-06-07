@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from src.component.eval import Experiment, RegistrationConfig
+from src.eval.experiment import Experiment, RegistrationConfig
 
 
 def load_finished_experiments(file_path: Path):
@@ -16,14 +16,6 @@ def save_finished_experiment(file_path: Path, finished: tuple):
     """Append a new finished experiment to the file."""
     with file_path.open("a") as file:
         file.write(json.dumps(finished) + "\n")
-
-
-def points_left(v_ds, at_least: int = 500):
-
-    left = v_ds * 1200 * 680
-    if left < at_least:
-        print("v_ds:", v_ds, "points:", left)
-    return left < at_least
 
 
 # TODO: downsample with different backends

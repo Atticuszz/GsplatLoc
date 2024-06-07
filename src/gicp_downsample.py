@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from src.component.eval import Experiment, RegistrationConfig, WandbConfig
+from src.eval.experiment import Experiment, RegistrationConfig, WandbConfig
 
 
 def load_finished_experiments(file_path: Path):
