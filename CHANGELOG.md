@@ -2,7 +2,50 @@
 
 
 
+## v0.1.0 (2024-06-07)
+
+### Chore
+
+* chore: finished depth_loss ([`80d6414`](https://github.com/Atticuszz/AB_GICP/commit/80d6414dce07fc56a8b42585619ec50960b9f1ec))
+
+* chore: add depth_loss.py ([`4421f40`](https://github.com/Atticuszz/AB_GICP/commit/4421f40cab006450fca4d8eb372704bc19ed194b))
+
+* chore: format code ([`588687e`](https://github.com/Atticuszz/AB_GICP/commit/588687e074518d443f74c04c57716711580bcc1f))
+
+* chore: adding lm ([`9084fa2`](https://github.com/Atticuszz/AB_GICP/commit/9084fa28814676d6455f965af15233d44f9eab77))
+
+* chore: mass ([`1a092b9`](https://github.com/Atticuszz/AB_GICP/commit/1a092b97c5cd1d0821298e51ba1ef745a48d63b9))
+
+* chore: build pointclouds class ([`61174f6`](https://github.com/Atticuszz/AB_GICP/commit/61174f6073b5e727ccc1049cc0ce590e6b162fc9))
+
+* chore: update REAMDME.md ([`0e3dede`](https://github.com/Atticuszz/AB_GICP/commit/0e3dede53fb2a19201df88c04b40a2ba701890be))
+
+* chore: finished knn test,select small_gicp ([`2afd883`](https://github.com/Atticuszz/AB_GICP/commit/2afd883117a1aed9633fe31a1ddb4bb63215c717))
+
+### Feature
+
+* feat: add color icp and finished the experiments ([`eb68c7f`](https://github.com/Atticuszz/AB_GICP/commit/eb68c7f0a645233241f3b9679fab82f5f524b19e))
+
+* feat: add o3d as gicp backend ([`04cad3f`](https://github.com/Atticuszz/AB_GICP/commit/04cad3fab7493fdb680ddc39f969befd7cb79470))
+
+* feat: adding gicp loss ([`e1b9dfe`](https://github.com/Atticuszz/AB_GICP/commit/e1b9dfee6b3858894050b81a32ff2b09485279ad))
+
+* feat: finished experiment class ([`b7d32c2`](https://github.com/Atticuszz/AB_GICP/commit/b7d32c22a8c8aba402d603eea64db5eda3693cbe))
+
+### Fix
+
+* fix: device selection in pytorch ([`4bcfd1e`](https://github.com/Atticuszz/AB_GICP/commit/4bcfd1ee110ab6b27f03e7143a4ae8c4634fe774))
+
+* fix: config experiment envs ([`24c1560`](https://github.com/Atticuszz/AB_GICP/commit/24c15608e9ee623b4f004a53ec8415ec6dcf68f7))
+
+* fix: config error in grip_downsample ([`160830c`](https://github.com/Atticuszz/AB_GICP/commit/160830cf843f93b97e7886365da816a962c60051))
+
+
 ## v0.0.1 (2024-05-24)
+
+### Chore
+
+* chore(release): bump version to v0.0.1 ([`e3e7ee6`](https://github.com/Atticuszz/AB_GICP/commit/e3e7ee62a53566075dcd1680da4e79fdc9cf47c0))
 
 ### Fix
 
