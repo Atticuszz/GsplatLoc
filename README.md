@@ -10,4 +10,13 @@
 5. [x] build depth_loss for model
 6. [ ] build silhoutte_loss and color loss(or lab loss) for model
 7. [ ] test for icps as 4 init params
-8.［ ］try L-BFGS 
+8. [ ] test for loss optimization via build experiment for wandb select 2 rgbd
+   1. step is num_iters of optimization
+   2. rgb,depth,counter diff result after reconstruction
+   3. total_loss plot for each step, separate for each loss then combind then compare
+   4. rgb  ,SSIMLoss,MS_SSIMLoss(combind SSIMLoss+l1),psnr_loss,
+   5. depth_loss first,InverseDepthSmoothnessLoss,total_variation
+   6. select best loss function for optimization
+
+
+normalization for depth and rgb ?
