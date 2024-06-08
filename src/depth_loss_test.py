@@ -21,10 +21,11 @@ def save_finished_experiment(file_path: Path, finished: tuple):
 # TODO: downsample with different backends
 if __name__ == "__main__":
     file_path = Path("depth_loss_finished_experiments.json")
-    methods = ["depth_loss"]
+    methods = ["0.9*silhouette_loss", "depth_loss"]
+    optimizer = ["adam", "LBFGS"]
     implements = "pytorch"
-    num_iters = 20
-    learning_rate = 1e-6
+    num_iters = 50
+    learning_rate = 1e-3
     rooms = ["room" + str(i) for i in range(3)] + ["office" + str(i) for i in range(5)]
 
     finished = load_finished_experiments(file_path)
@@ -42,7 +43,8 @@ if __name__ == "__main__":
                         sub_set=room,
                         num_iters=num_iters,
                         learning_rate=learning_rate,
-                        description="depth_loss for pose estimation",
+                        optimizer=optimizer[0],
+                        description="seperated T for  depth_loss for pose estimation",
                         implementation="pytorch",
                     ),
                 )

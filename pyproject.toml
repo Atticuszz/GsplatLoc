@@ -22,6 +22,7 @@ scipy = "^1.13.0"
 wandb = "^0.17.0"
 #small-gicp = "^0.0.6"
 torch = "^2.3.0"
+kornia = "^0.7.2"
 
 
 

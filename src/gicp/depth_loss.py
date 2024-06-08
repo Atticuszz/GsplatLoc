@@ -1,3 +1,4 @@
+import kornia
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
@@ -15,6 +16,18 @@ DEVICE = (
 print(f"Using {DEVICE} DEVICE")
 
 
+def construct_full_pose(rotation, translation):
+    """
+    Constructs the full 4x4 transformation matrix from rotation and translation.
+    Ensures that gradients are tracked for rotation and translation.
+    """
+    pose = torch.eye(4, dtype=torch.float64, device=DEVICE)
+    pose[:3, :3] = rotation
+    pose[:3, 3] = translation
+    pose.requires_grad_(True)  # Ensure that gradients are tracked
+    return pose
+
+
 class PoseEstimationModel(nn.Module):
     """
     Initialize the CameraPoseEstimator with camera intrinsics and computation device.
@@ -30,8 +43,13 @@ class PoseEstimationModel(nn.Module):
     def __init__(self, intrinsics: Tensor, init_pose: Tensor, device="cuda"):
         super().__init__()
         self.intrinsics = intrinsics
-        self.pose_last = init_pose
-        self.pose_cur = nn.Parameter(init_pose)
+        self.rotation_last = init_pose[:3, :3]
+        self.translation_last = init_pose[:3, 3]
+        self.rotation_cur = nn.Parameter(init_pose[:3, :3])
+        self.translation_cur = nn.Parameter(init_pose[:3, 3])
+
+        # self.pose_last = init_pose
+        # self.pose_cur = nn.Parameter(init_pose)
         self.device = device
 
     def forward(self, depth_last, depth_current):
@@ -47,13 +65,17 @@ class PoseEstimationModel(nn.Module):
         loss: torch.Tensor
             The loss value.
         """
+        rotation_last = self.rotation_last
+        translation_last = self.translation_last
+        pose_last = construct_full_pose(rotation_last, translation_last)
+        pose_cur = construct_full_pose(self.rotation_cur, self.translation_cur)
         # depth to pcd
-        pcd_last = self.depth_to_pointcloud(depth_last, self.pose_last)
-        pcd_current = self.depth_to_pointcloud(depth_current, self.pose_cur)
+        pcd_last = self.depth_to_pointcloud(depth_last, pose_last)
+        pcd_current = self.depth_to_pointcloud(depth_current, pose_cur)
 
         # projected to depth
-        projected_depth_last = self.pointcloud_to_depth(pcd_last, self.pose_cur)
-        projected_depth_current = self.pointcloud_to_depth(pcd_current, self.pose_cur)
+        projected_depth_last = self.pointcloud_to_depth(pcd_last, pose_cur)
+        projected_depth_current = self.pointcloud_to_depth(pcd_current, pose_cur)
 
         # combined
         combined_projected_depth = torch.min(
@@ -63,15 +85,44 @@ class PoseEstimationModel(nn.Module):
             projected_depth_last, projected_depth_current
         )[combined_projected_depth == 0]
 
-        # Calculate MSE loss
+        # NOTE: Calculate depth MSE loss
         mse_loss = F.mse_loss(combined_projected_depth, depth_current)
 
-        # Regularization term: penalize large changes in the pose
-        reg_loss = torch.sum((self.pose_cur - self.pose_last) ** 2)
+        # NOTE:  silhouette MSE loss
+        silhouette = self.silhouette_loss(combined_projected_depth, depth_current)
 
-        # Combine losses
-        loss = mse_loss + 0.001 * reg_loss  # Adjust regularization weight as needed
-        return loss
+        # # Regularization term: penalize large changes in the pose
+        # reg_loss = torch.sum((self.pose_cur - self.pose_last) ** 2)
+
+        # NOTE: Regularization for pose changes
+        reg_loss_rotation = torch.sum((self.rotation_cur - rotation_last) ** 2)
+        reg_loss_translation = torch.sum((self.translation_cur - translation_last) ** 2)
+
+        # NOTE: Combine losses
+        total_loss = (
+            0.3 * mse_loss
+            + 0.1 * (reg_loss_rotation + reg_loss_translation)
+            + 0.6 * silhouette
+        )
+
+        return total_loss
+
+    def silhouette_loss(self, predicted_depth, target_depth):
+        """Calculate contour loss between predicted and target depth images."""
+        # Ensure the depth images have a batch dimension and a channel dimension
+        if predicted_depth.dim() == 2:
+            predicted_depth = predicted_depth.unsqueeze(0).unsqueeze(
+                0
+            )  # Reshape [H, W] to [1, 1, H, W]
+        if target_depth.dim() == 2:
+            target_depth = target_depth.unsqueeze(0).unsqueeze(
+                0
+            )  # Reshape [H, W] to [1, 1, H, W]
+
+        edge_predicted = kornia.filters.sobel(predicted_depth)
+        edge_target = kornia.filters.sobel(target_depth)
+
+        return F.mse_loss(edge_predicted, edge_target)
 
     def depth_to_pointcloud(self, depth, pose):
         """
@@ -138,48 +189,102 @@ class PoseEstimationModel(nn.Module):
         return projected_depth
 
 
-def train_model(
+def train_model_with_adam(
     tar_rgb_d: RGBDImage,
     src_rgb_d: RGBDImage,
     K: Tensor,
-    num_iterations=20,
-    learning_rate=1e-6,
+    num_iterations=50,
+    learning_rate=1e-3,
 ) -> tuple[float, Tensor]:
-    init_pose = to_tensor(tar_rgb_d.pose, DEVICE)
+    init_pose = to_tensor(tar_rgb_d.pose, DEVICE, requires_grad=True)
     model = PoseEstimationModel(K, init_pose, DEVICE)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5)
+
     # result
     min_loss = float("inf")
     best_pose = init_pose.clone()
     for i in range(num_iterations):
         optimizer.zero_grad()
-        depth_last = to_tensor(tar_rgb_d.depth, DEVICE)
-        depth_current = to_tensor(src_rgb_d.depth, DEVICE)
+        depth_last = to_tensor(tar_rgb_d.depth, DEVICE, requires_grad=True)
+        depth_current = to_tensor(src_rgb_d.depth, DEVICE, requires_grad=True)
         loss = model(depth_last, depth_current)
         loss.backward()
         optimizer.step()
+        with torch.no_grad():
+            if loss.item() < min_loss:
+                min_loss = loss.item()
+                r, t = model.rotation_cur, model.translation_cur
+                best_pose = construct_full_pose(r, t)
 
-        if loss.item() < min_loss:
-            min_loss = loss.item()
-            best_pose = model.pose_cur.clone()
-
-        # if i % 10 == 0:
-        #     print(f"Iteration {i}: Loss {min_loss}")
+            if i % 10 == 0:
+                print(f"Iteration {i}: Loss {min_loss}")
         # scheduler.step()
     return min_loss, best_pose
 
 
+def train_model_with_LBFGS(
+    tar_rgb_d: RGBDImage,
+    src_rgb_d: RGBDImage,
+    K: Tensor,
+    num_iterations=20,
+    learning_rate=1e-3,
+) -> tuple[float, Tensor]:
+    init_pose = to_tensor(tar_rgb_d.pose, DEVICE, requires_grad=True)
+    model = PoseEstimationModel(K, init_pose, DEVICE)
+    model.to(DEVICE)
+
+    # check if all parameters require gradients
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            print(f"Parameter {name} does not require gradients.")
+
+    # 使用 LBFGS 优化器
+    optimizer = optim.LBFGS(
+        model.parameters(), lr=learning_rate, max_iter=1, history_size=10
+    )
+
+    def closure():
+        optimizer.zero_grad()
+        depth_last = to_tensor(tar_rgb_d.depth, DEVICE)
+        depth_current = to_tensor(src_rgb_d.depth, DEVICE)
+        loss = model(depth_last, depth_current)
+        loss.backward()
+        return loss
+
+    min_loss = float("inf")
+    best_pose = None
+
+    # 执行优化
+    for i in range(num_iterations):
+        optimizer.step(closure)
+        loss = closure()
+        with torch.no_grad():
+            if loss.item() < min_loss:
+                min_loss = loss.item()
+                r, t = model.rotation_cur.clone(), model.translation_cur.clone()
+                best_pose = construct_full_pose(r, t)
+            if i % 10 == 0:
+                print(f"Iteration {i}: Loss {min_loss}")
+
+    return min_loss, best_pose
+
+
 def eval():
-    tar_rgb_d, src_rgb_d = Replica()[0], Replica()[1]
-    _, estimate_pose = train_model(tar_rgb_d, src_rgb_d, to_tensor(tar_rgb_d.K, DEVICE))
+    tar_rgb_d, src_rgb_d = Replica()[1], Replica()[2]
+    _, estimate_pose = train_model_with_adam(
+        tar_rgb_d, src_rgb_d, to_tensor(tar_rgb_d.K, DEVICE, requires_grad=True)
+    )
+    # _, estimate_pose = train_model_with_LBFGS(
+    #     tar_rgb_d, src_rgb_d, to_tensor(tar_rgb_d.K, DEVICE, requires_grad=True)
+    # )
 
     eT = calculate_translation_error(
         estimate_pose.detach().cpu().numpy(), tar_rgb_d.pose
     )
     eR = calculate_rotation_error(estimate_pose.detach().cpu().numpy(), tar_rgb_d.pose)
-    print(f"Translation error: {eT}")
-    print(f"Rotation error: {eR}")
+    print(f"Translation error: {eT:.8f}")
+    print(f"Rotation error: {eR:.8f}")
 
 
 if __name__ == "__main__":

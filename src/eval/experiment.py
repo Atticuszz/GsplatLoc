@@ -11,7 +11,7 @@ from src.eval.utils import (
     calculate_translation_error,
     diff_pcd_COM,
 )
-from src.gicp.depth_loss import train_model, DEVICE
+from src.gicp.depth_loss import train_model_with_adam, DEVICE, train_model_with_LBFGS
 from src.slam_data import Replica, RGBDImage
 from src.slam_data.dataset import DataLoaderBase
 from src.utils import to_tensor
@@ -38,6 +38,7 @@ class WandbConfig(NamedTuple):
     implementation: str | None = None
     num_iters: int | None = None
     learning_rate: float | None = None
+    optimizer: str | None = None
 
     def as_dict(self):
         return {key: val for key, val in self._asdict().items() if val is not None}
@@ -127,9 +128,13 @@ class ICPExperiment(ExperimentBase):
 class DepthLossExperiment(ExperimentBase):
 
     def __init__(self, wandb_config: WandbConfig):
-        super().__init__(
-            backends=train_model, wandb_config=wandb_config, extra_config=kwargs
-        )
+        if wandb_config.optimizer == "adam":
+            super().__init__(backends=train_model_with_adam, wandb_config=wandb_config)
+        elif wandb_config.optimizer == "LBFGS":
+            super().__init__(backends=train_model_with_LBFGS, wandb_config=wandb_config)
+        else:
+            raise ValueError("Optimizer not supported.")
+
         self.num_iters = wandb_config.num_iters
         self.learning_rate = wandb_config.learning_rate
 
@@ -154,7 +159,7 @@ class DepthLossExperiment(ExperimentBase):
                 min_loss, pose = self.backends(
                     self.data[i - 1],
                     rgbd_image,
-                    to_tensor(self.data.K, device=DEVICE),
+                    to_tensor(self.data.K, device=DEVICE, requires_grad=True),
                     num_iterations=self.num_iters,
                     learning_rate=self.learning_rate,
                 )

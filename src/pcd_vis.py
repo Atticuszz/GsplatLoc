@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 
 from component import PcdVisualizer
 from component.tracker import Scan2ScanICP
-from src.gicp.depth_loss import train_model
+from src.gicp.depth_loss import train_model_with_adam
 from src.slam_data.dataset import Replica
 from src.slam_data.Image import RGBDImage
 from src.utils import to_tensor
@@ -59,7 +59,7 @@ class PointCloudProcessor(Scan2ScanICP):
             else:
                 # T_last_current = self.gt_poses[-1] @ np.linalg.inv(self.gt_poses[-2])
                 # estimate_pose = self.align_o3d(new_pcd, T_last_current=T_last_current)
-                _, estimate_pose = train_model(
+                _, estimate_pose = train_model_with_adam(
                     self.data_loader[i - 1],
                     rgbd_image,
                     to_tensor(self.data_loader.K, device="cuda"),
