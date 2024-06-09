@@ -2,9 +2,18 @@
 
 
 
+## v0.2.1 (2024-06-09)
+
+### Fix
+
+* fix: make unproject_depth func differentiable ([`11aa2a3`](https://github.com/Atticuszz/AB_GICP/commit/11aa2a3ad73d9db41418b58406397ae3099e509f))
+
+
 ## v0.2.0 (2024-06-09)
 
 ### Chore
+
+* chore(release): bump version to v0.2.0 ([`ee71281`](https://github.com/Atticuszz/AB_GICP/commit/ee712815ab0e2ee8cc4c68dc40f001b154027646))
 
 * chore: reshape model pys ([`6e263ec`](https://github.com/Atticuszz/AB_GICP/commit/6e263ecdd3282f9f350171a7c96cfc0a033efe86))
 
