@@ -2,9 +2,30 @@
 
 
 
+## v0.2.0 (2024-06-09)
+
+### Chore
+
+* chore: reshape model pys ([`6e263ec`](https://github.com/Atticuszz/AB_GICP/commit/6e263ecdd3282f9f350171a7c96cfc0a033efe86))
+
+* chore: update README.md ([`e19e9fd`](https://github.com/Atticuszz/AB_GICP/commit/e19e9fd8ac0b21b61918d04100f42aa882eb5660))
+
+* chore: add counter loss and lbfgs optimizer ([`0441ab7`](https://github.com/Atticuszz/AB_GICP/commit/0441ab7430fddaa9891a1fddd52ee79ed87e2bfb))
+
+### Feature
+
+* feat: add training model vis wandb loger ([`848eb89`](https://github.com/Atticuszz/AB_GICP/commit/848eb89ca2833b02f58ab0cc5d3add998915c1a2))
+
+### Unknown
+
+* Update README.md ([`2fdc295`](https://github.com/Atticuszz/AB_GICP/commit/2fdc29576fe1b7e0814539ffbf3ecc47b6dfe594))
+
+
 ## v0.1.0 (2024-06-07)
 
 ### Chore
+
+* chore(release): bump version to v0.1.0 ([`4172712`](https://github.com/Atticuszz/AB_GICP/commit/417271229f6a570b72e713101f64f25a0068ce8c))
 
 * chore: finished depth_loss ([`80d6414`](https://github.com/Atticuszz/AB_GICP/commit/80d6414dce07fc56a8b42585619ec50960b9f1ec))
 
