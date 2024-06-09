@@ -72,19 +72,17 @@ class PoseEstimationModel(nn.Module):
         pcd_last = project_depth(normalized_depth_last, pose_last, self.intrinsics)
         pcd_current = project_depth(normalized_depth_current, pose_cur, self.intrinsics)
 
-        # projected to depth
-        projected_depth_last = unproject_depth(pcd_last, pose_cur, self.intrinsics)
-        projected_depth_current = unproject_depth(
-            pcd_current, pose_cur, self.intrinsics
-        )
-
-        # combined
-        combined_projected_depth = torch.min(
-            projected_depth_last, projected_depth_current
-        )
-        combined_projected_depth[combined_projected_depth == 0] = torch.max(
-            projected_depth_last, projected_depth_current
-        )[combined_projected_depth == 0]
+        # Merge point clouds using a differentiable method
+        # Assuming pcd_last and pcd_current are [H, W, 4]
+        valid_last = (pcd_last[..., 2] > 0).float()  # Depth should be greater than 0
+        valid_current = (pcd_current[..., 2] > 0).float()
+        weights_last = valid_last / (valid_last + valid_current + 1e-6)
+        weights_current = valid_current / (valid_last + valid_current + 1e-6)
+    
+        merged_pcd = weights_last.unsqueeze(-1) * pcd_last + weights_current.unsqueeze(-1) * pcd_current
+    
+        # Project the merged point cloud back to depth map
+        combined_projected_depth = unproject_depth(merged_pcd, pose_cur, self.intrinsics)
 
         # NOTE: Calculate depth  loss
         depth_loss = compute_depth_loss(
