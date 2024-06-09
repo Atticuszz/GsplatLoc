@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 
 from component import PcdVisualizer
 from component.tracker import Scan2ScanICP
-from src.gicp.depth_loss import train_model_with_adam
+from src.pose_estimation.depth_loss import train_model_with_adam
 from src.slam_data.dataset import Replica
 from src.slam_data.Image import RGBDImage
 from src.utils import to_tensor

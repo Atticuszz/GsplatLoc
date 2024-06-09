@@ -11,7 +11,13 @@ from src.eval.utils import (
     calculate_translation_error,
     diff_pcd_COM,
 )
-from src.gicp.depth_loss import train_model_with_adam, DEVICE, train_model_with_LBFGS
+from src.pose_estimation import DEVICE
+from src.pose_estimation.model import (
+    train_model_with_adam,
+    train_model_with_LBFGS,
+    PoseEstimationModel,
+)
+
 from src.slam_data import Replica, RGBDImage
 from src.slam_data.dataset import DataLoaderBase
 from src.utils import to_tensor
@@ -183,3 +189,15 @@ class DepthLossExperiment(ExperimentBase):
             com = diff_pcd_COM(est_pcd, gt_pcd)
             self.logger.log_com_diff(com, i)
         self.logger.finish()
+
+
+class LossTrainExperiment(ExperimentBase):
+
+    def __init__(self, wandb_config: WandbConfig):
+        super().__init__(backends=PoseEstimationModel, wandb_config=wandb_config)
+        self.num_iters = wandb_config.num_iters
+        self.learning_rate = wandb_config.learning_rate
+        self.optimizer = wandb_config.optimizer
+
+    def run(self):
+        raise NotImplementedError
