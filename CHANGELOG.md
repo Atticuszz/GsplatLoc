@@ -2,7 +2,18 @@
 
 
 
+## v0.2.2 (2024-06-09)
+
+### Fix
+
+* fix: model.py Merge point clouds using a differentiable method ([`c9082db`](https://github.com/Atticuszz/AB_GICP/commit/c9082db821ef56042e7e14c43c3ea15c0b43e23c))
+
+
 ## v0.2.1 (2024-06-09)
+
+### Chore
+
+* chore(release): bump version to v0.2.1 ([`4f48c56`](https://github.com/Atticuszz/AB_GICP/commit/4f48c5640173880a0f584125eb86f1c467f4c674))
 
 ### Fix
 
