@@ -76,13 +76,11 @@ def unproject_depth(pcd: Tensor, pose: Tensor, intrinsics: Tensor) -> Tensor:
     u = (x / z) * intrinsics[0, 0] + intrinsics[0, 2]
     v = (y / z) * intrinsics[1, 1] + intrinsics[1, 2]
 
-    projected_depth = torch.zeros_like(z)
-    height, width = z.shape
-    u, v = u.long(), v.long()
-    valid = (u >= 0) & (u < width) & (v >= 0) & (v < height)
-    projected_depth[v[valid], u[valid]] = z[valid]
-
-    return projected_depth
+    grid = torch.stack((u / z.shape[1], v / z.shape[0]), dim=-1) * 2 - 1  # Normalize to [-1, 1]
+    depth = z.unsqueeze(0).unsqueeze(1)
+    
+    projected_depth = F.grid_sample(depth, grid, mode='bilinear', padding_mode='zeros', align_corners=False)
+    return projected_depth.squeeze()
 
 
 def compute_silhouette_diff(depth: Tensor, rastered_depth: Tensor) -> Tensor:
