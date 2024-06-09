@@ -1,3 +1,4 @@
+import kornia
 import torch
 from torch import Tensor
 
@@ -82,3 +83,45 @@ def unproject_depth(pcd: Tensor, pose: Tensor, intrinsics: Tensor) -> Tensor:
     projected_depth[v[valid], u[valid]] = z[valid]
 
     return projected_depth
+
+
+def compute_silhouette_diff(depth: Tensor, rastered_depth: Tensor) -> Tensor:
+    """
+    Compute the difference between the sobel edges of two depth images.
+
+    Parameters
+    ----------
+    depth : torch.Tensor
+        The depth image with dimensions [height, width].
+    rastered_depth : torch.Tensor
+        The depth image with dimensions [height, width].
+
+    Returns
+    -------
+    torch.Tensor
+        The silhouette difference between the two depth images with dimensions [height, width].
+    """
+    if depth.dim() == 2:
+        depth = depth.unsqueeze(0).unsqueeze(0)
+    else:
+        depth = depth.unsqueeze(1)
+    if rastered_depth.dim() == 2:
+        rastered_depth = rastered_depth.unsqueeze(0).unsqueeze(0)
+    else:
+        rastered_depth = rastered_depth.unsqueeze(1)
+    edge_depth = kornia.filters.sobel(depth)
+    edge_rastered_depth = kornia.filters.sobel(rastered_depth)
+    silhouette_diff = torch.abs(edge_depth - edge_rastered_depth).squeeze()
+    return silhouette_diff
+
+
+def normalize_depth(depth):
+    min_val = depth.min()
+    max_val = depth.max()
+    normalized_depth = (depth - min_val) / (max_val - min_val)
+    return normalized_depth, min_val, max_val
+
+
+def unnormalize_depth(normalized_depth, min_val, max_val):
+    depth = normalized_depth * (max_val - min_val) + min_val
+    return depth
