@@ -2,7 +2,18 @@
 
 
 
+## v0.2.3 (2024-06-10)
+
+### Fix
+
+* fix: Update gemoetry.py ([`20a8122`](https://github.com/Atticuszz/AB_GICP/commit/20a8122bf44a81975c856750ae92a5d1017284cb))
+
+
 ## v0.2.2 (2024-06-09)
+
+### Chore
+
+* chore(release): bump version to v0.2.2 ([`a4e2f70`](https://github.com/Atticuszz/AB_GICP/commit/a4e2f700597d0401c90bc6f3aba0b09b7b4e964a))
 
 ### Fix
 
