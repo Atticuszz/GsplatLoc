@@ -25,4 +25,4 @@ normalization for depth and rgb
 not clean
 8. [ ] and remove combination of pcd to unproject with unprojecting total that  closed 
 
-9. faiss nns can computing n pcd together on gpu for easier with lm optimize via pytorch
+9. faiss nns can computing n pcd together on gpu for pytorch adam
