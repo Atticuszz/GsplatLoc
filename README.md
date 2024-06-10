@@ -19,4 +19,10 @@
    6. select best loss function for optimization
 
 
-normalization for depth and rgb ?
+normalization for depth and rgb
+
+7. [ ] forward method ,DS for pcd
+not clean
+8. [ ] and remove combination of pcd to unproject with unprojecting total that  closed 
+
+9. faiss nns can computing n pcd together on gpu for easier with lm optimize via pytorch
