@@ -33,23 +33,28 @@ def project_depth(depth: Tensor, pose: Tensor, intrinsics: Tensor) -> Tensor:
     Returns
     -------
     torch.Tensor
-        The converted point cloud in world coordinates with dimensions [height, width, 4].
+        The converted point cloud in world coordinates with dimensions [height*width, 4].
     """
     height, width = depth.shape
+    device = depth.device
     grid_x, grid_y = torch.meshgrid(
-        torch.arange(width), torch.arange(height), indexing="xy"
+        torch.arange(width, dtype=torch.float64, device=device),
+        torch.arange(height, dtype=torch.float64, device=device),
+        indexing="xy",
     )
-    grid_x = grid_x.float().to(DEVICE)
-    grid_y = grid_y.float().to(DEVICE)
 
-    Z = depth.to(DEVICE)
+    # Transform grid to camera coordinates
+    Z = depth
     X = (grid_x - intrinsics[0, 2]) * Z / intrinsics[0, 0]
     Y = (grid_y - intrinsics[1, 2]) * Z / intrinsics[1, 1]
-    ones = torch.ones_like(Z)
 
-    pcd = torch.stack((X, Y, Z, ones), dim=-1)
-    pcd_world = torch.einsum("hwj,jk->hwk", pcd, pose)
-    return pcd_world
+    # Create homogenous coordinates
+    ones = torch.ones_like(Z)
+    pcd_camera = torch.stack((X, Y, Z, ones), dim=-1)
+
+    # Transform to world coordinates
+    pcd_world = torch.einsum("hwj,jk->hwk", pcd_camera, pose)
+    return pcd_world.reshape(-1, 4)
 
 
 def unproject_depth(pcd: Tensor, pose: Tensor, intrinsics: Tensor) -> Tensor:
@@ -58,6 +63,8 @@ def unproject_depth(pcd: Tensor, pose: Tensor, intrinsics: Tensor) -> Tensor:
 
     Parameters
     ----------
+    intrinsics:
+
     pcd : torch.Tensor
        The point cloud in world coordinates with dimensions [height, width, 4].
     pose : torch.Tensor
@@ -68,14 +75,16 @@ def unproject_depth(pcd: Tensor, pose: Tensor, intrinsics: Tensor) -> Tensor:
     torch.Tensor
        The depth image created from the point cloud with dimensions [height, width].
     """
-    # Inverse transform to world coordinates (assuming pcd includes homogenous coordinate)
-    homogenous_world = torch.einsum('hwj,jk->hwk', pcd[..., 2:], torch.inverse(pose))
+    # Inverse transform to world coordinates (assuming pcd includes homogeneous coordinate)
+    homogenous_world = torch.einsum("hwj,jk->hwk", pcd[..., 2:], torch.inverse(pose))
 
-    # Convert homogenous coordinates back to Euclidean coordinates in the camera frame
-    xyz_camera = homogenous_world[..., :3] / (homogenous_world[..., 3:4] + 1e-10)  # Adding epsilon to avoid division by zero
+    # Convert homogeneous coordinates back to Euclidean coordinates in the camera frame
+    xyz_camera = homogenous_world[..., :3] / (
+        homogenous_world[..., 3:4] + 1e-10
+    )  # Adding epsilon to avoid division by zero
 
     # Project points using intrinsics
-    projected = torch.einsum('ij,hwj->hwi', intrinsics, xyz_camera)
+    projected = torch.einsum("ij,hwj->hwi", intrinsics, xyz_camera)
     u = projected[:, :, 0] / (projected[:, :, 2] + 1e-10)  # u coordinate
     v = projected[:, :, 1] / (projected[:, :, 2] + 1e-10)  # v coordinate
 
