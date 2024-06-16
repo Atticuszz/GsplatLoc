@@ -14,7 +14,6 @@ def construct_full_pose(rotation, translation):
     pose = torch.eye(4, dtype=torch.float64, device=DEVICE)
     pose[:3, :3] = rotation
     pose[:3, 3] = translation
-    pose.requires_grad_(True)  # Ensure that gradients are tracked
     return pose
 
 

@@ -6,6 +6,11 @@ import torch.optim as optim
 from torch.autograd import Function
 from kornia.geometry.conversions import vector_to_skew_symmetric_matrix as skew
 from src.gicp.pcd import PointClouds
+from src.pose_estimation.gemoetry import (
+    rotation_matrix_to_quaternion,
+    quaternion_to_rotation_matrix,
+    construct_full_pose,
+)
 from src.slam_data import Replica, RGBDImage
 from src.utils import to_tensor
 
@@ -66,23 +71,37 @@ class GICPJacobianApprox(Function):
         ) = ctx.saved_tensors
 
         # Compute skew-symmetric matrices for each source point
-        skew_matrix = skew(src_points[:, :3]).reshape(-1, 9)  # Reshape to (N, 9)
-        J_rotation = -torch.einsum("ik,in9->ink", transformation[:3, :3], skew_matrix)
+        skew_matrix = skew(src_points[:, :3])
+
+        # j_r.shape = (n,3,3)
+        J_rotation = -torch.einsum("ik,nkj->nij", transformation[:3, :3], skew_matrix)
+        # print(f"J_rotation:{J_rotation.shape}")
+        # j_t.shape = (n,3,3)
         J_translation = -torch.eye(3, device=src_points.device).expand(
             src_points.size(0), 3, 3
         )
-        J = torch.cat([J_rotation, J_translation], dim=-1)
+
+        J = torch.cat([J_rotation, J_translation], dim=-1)  # shape (N, 3, 6)
 
         # Efficient calculation of grad_residuals
-        grad_residuals = 2 * torch.einsum("nj,njk,nk->n", residuals, inv_RCR, residuals)
+        # grad shape n,
+        # residuals shape n,3,1
+        grad_residuals = torch.einsum(
+            "nji,njk,nkl->n", residuals.transpose(-2, -1), inv_RCR, residuals
+        ).squeeze()
 
+        # Sum up gradients for rotation and translation separately and then average them
         # Compute the gradient of transformation
         grad_transformation = torch.zeros_like(transformation)
         grad_transformation[:3, :3] = (
-            torch.einsum("nij,n->ij", J[:, :3], grad_residuals) * grad_output
+            torch.einsum("nij,n->ij", J[:, :, :3], grad_residuals)
+            * grad_output
+            / src_points.size(0)
         )
         grad_transformation[:3, 3] = (
-            torch.einsum("nij,n->j", J[:, 3:], grad_residuals) * grad_output
+            torch.einsum("nij,n->j", J[:, :, :3], grad_residuals)
+            * grad_output
+            / src_points.size(0)
         )
 
         return grad_transformation, None, None, None, None
@@ -97,11 +116,16 @@ class GICPModel(nn.Module):
     ):
         super().__init__()
         # optimization Parameter
-        self.transformation = nn.Parameter(
-            init_T
-            if init_T is not None
-            else torch.eye(4, dtype=torch.float64, device=device)
-        )
+        if init_T is None:
+            init_T = torch.eye(4, dtype=torch.float64, device=device)
+        self.quaternion = nn.Parameter(rotation_matrix_to_quaternion(init_T[:3, :3]))
+        self.translation = nn.Parameter(init_T[:3, 3])
+
+        # self.transformation = nn.Parameter(
+        #     init_T
+        #     if init_T is not None
+        #     else torch.eye(4, dtype=torch.float64, device=device)
+        # )
 
         # small_gicp wrapped point clouds
         self.src_pcd = src_pcd
@@ -114,8 +138,10 @@ class GICPModel(nn.Module):
         self.covs_tar = to_tensor(tar_pcd.covs, device=device)
 
     def forward(self) -> torch.Tensor:
+        rotation = quaternion_to_rotation_matrix(self.quaternion)
+        transformation = construct_full_pose(rotation, self.translation)
         # batch_knn for preprocessed point clouds
-        transformed_src_points = torch.matmul(self.src_points, self.transformation)
+        transformed_src_points = torch.matmul(self.src_points, transformation)
         nearest_indices, _ = self.tar_pcd.kdtree.batch_nns_search(
             transformed_src_points.detach().cpu().numpy()
         )
@@ -127,7 +153,7 @@ class GICPModel(nn.Module):
         covs_tar = self.covs_tar[nearest_indices]
 
         return GICPJacobianApprox.apply(
-            self.transformation,
+            transformation,
             transformed_src_points,
             selected_tar_points,
             covs_src,
@@ -135,23 +161,61 @@ class GICPModel(nn.Module):
         )
 
 
-def training(
-    tar_pcd: PointClouds,
-    src_pcd: PointClouds,
-    num_epochs: int = 100,
-) -> float:
-    model = GICPModel(tar_pcd, src_pcd)
+# def training(
+#     tar_pcd: PointClouds,
+#     src_pcd: PointClouds,
+#     num_epochs: int = 100,
+# ) -> float:
+#     model = GICPModel(tar_pcd, src_pcd)
+#
+#     optimizer = optim.Adam(model.parameters(), lr=1e-3)
+#     scheduler = torch.optim.lr_scheduler.CyclicLR(
+#         optimizer, base_lr=1e-4, max_lr=1e-3, step_size_up=5, mode="triangular"
+#     )
+#
+#     lr = scheduler.get_last_lr()
+#
+#     for epoch in range(num_epochs):
+#         print(f"last lr: {lr}")
+#         start = default_timer()
+#         optimizer.zero_grad()
+#         loss = model()
+#         loss.backward()
+#         # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+#
+#         for name, param in model.named_parameters():
+#             if param.grad is not None:
+#                 print(f"Gradient of {name} has norm: {param.grad.norm().item()}")
+#
+#         optimizer.step()
+#         scheduler.step(loss)
+#         end = default_timer() - start
+#
+#         print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss.item()}, Time: {end:.6f}s")
+#     return loss.item()
 
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-    for epoch in range(num_epochs):
-        start = default_timer()
+
+def training(tar_pcd, src_pcd, num_epochs=100):
+    model = GICPModel(tar_pcd, src_pcd)
+    optimizer = optim.LBFGS(model.parameters(), lr=1e-3, max_iter=10, history_size=100)
+
+    def closure():
         optimizer.zero_grad()
         loss = model()
         loss.backward()
-        optimizer.step()
+        return loss
+
+    for epoch in range(num_epochs):
+        for name, param in model.named_parameters():
+            if param.grad is not None:
+                print(f"Gradient of {name} has norm: {param.grad.norm().item()}")
+        start = default_timer()
+        optimizer.step(closure)  # 注意：LBFGS 需要一个闭包来重新计算模型
+        loss = closure()  # 重新计算损失
         end = default_timer() - start
 
         print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss.item()}, Time: {end:.6f}s")
+
     return loss.item()
 
 
@@ -168,7 +232,7 @@ def eval():
     loss = training(
         src_pcd,
         tar_pcd,
-        num_epochs=5,
+        num_epochs=100,
     )
     print(f"Final loss: {loss}")
 
