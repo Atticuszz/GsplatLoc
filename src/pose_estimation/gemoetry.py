@@ -1,6 +1,7 @@
 import kornia
 import torch
 from torch import Tensor
+import kornia.geometry.conversions as KG
 
 from src.pose_estimation import DEVICE
 
@@ -33,7 +34,7 @@ def project_depth(depth: Tensor, pose: Tensor, intrinsics: Tensor) -> Tensor:
     Returns
     -------
     torch.Tensor
-        The converted point cloud in world coordinates with dimensions [height*width, 4].
+        The converted point cloud in world coordinates with dimensions [height,width, 4].
     """
     height, width = depth.shape
     device = depth.device
@@ -54,10 +55,43 @@ def project_depth(depth: Tensor, pose: Tensor, intrinsics: Tensor) -> Tensor:
 
     # Transform to world coordinates
     pcd_world = torch.einsum("hwj,jk->hwk", pcd_camera, pose)
-    return pcd_world.reshape(-1, 4)
+    return pcd_world
 
 
-def unproject_depth(pcd: Tensor, pose: Tensor, intrinsics: Tensor) -> Tensor:
+def unproject_depth(pcd_last, pcd_current, pose_cur):
+    """
+    Project two point clouds to the current camera pose and merge by selecting the minimum depth at each pixel.
+
+    Parameters:
+    pcd_last, pcd_current : torch.Tensor
+        Point clouds in world coordinates, dimensions [H, W, 4] with each point as [x, y, z, 1].
+    pose_cur : torch.Tensor
+        The 4x4 transformation matrix from world to current camera coordinates.
+
+    Returns:
+    torch.Tensor
+        The merged depth map in the current camera frame, dimensions [H, W].
+    """
+    # Transform point clouds to the current camera frame
+    pcd_last_cam = torch.einsum("hwj,jk->hwk", pcd_last, torch.inverse(pose_cur))
+    pcd_current_cam = torch.einsum("hwj,jk->hwk", pcd_current, torch.inverse(pose_cur))
+
+    # Project points using intrinsics and get depth values
+    depth_last = pcd_last_cam[..., 2]
+    depth_current = pcd_current_cam[..., 2]
+
+    # Filter points behind the camera by setting their depth to a large value
+    large_value = torch.inf  # Can be set to an appropriate large value or torch.inf
+    depth_last = torch.where(depth_last > 0, depth_last, large_value)
+    depth_current = torch.where(depth_current > 0, depth_current, large_value)
+
+    # Merge depths by selecting the minimum depth at each pixel location
+    merged_depth = torch.min(depth_last, depth_current)
+
+    return merged_depth
+
+
+def _unproject_depth(pcd: Tensor, pose: Tensor, intrinsics: Tensor) -> Tensor:
     """
     Projects a point cloud from world coordinates back to a depth image using the provided pose.
 
@@ -135,3 +169,39 @@ def normalize_depth(depth):
 def unnormalize_depth(normalized_depth, min_val, max_val):
     depth = normalized_depth * (max_val - min_val) + min_val
     return depth
+
+
+def quaternion_to_rotation_matrix(quaternion: Tensor) -> Tensor:
+    """
+    Convert a quaternion to a rotation matrix.
+
+    Parameters
+    ----------
+    quaternion : torch.Tensor
+        The quaternion with dimensions [4].
+
+    Returns
+    -------
+    torch.Tensor
+        The rotation matrix with dimensions [3, 3].
+    """
+
+    normalized_quaternion = quaternion / torch.norm(quaternion)
+    return KG.quaternion_to_rotation_matrix(normalized_quaternion)
+
+
+def rotation_matrix_to_quaternion(rotation_matrix: Tensor) -> Tensor:
+    """
+    Convert a rotation matrix to a quaternion.
+
+    Parameters
+    ----------
+    rotation_matrix : torch.Tensor
+        The rotation matrix with dimensions [3, 3].
+
+    Returns
+    -------
+    torch.Tensor
+        The quaternion with dimensions [4].
+    """
+    return KG.rotation_matrix_to_quaternion(rotation_matrix)

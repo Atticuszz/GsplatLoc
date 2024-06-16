@@ -9,10 +9,14 @@ class PointClouds:
     """
 
     def __init__(
-        self, pcd: NDArray[np.float64], rgb: NDArray[np.float64], *, threads: int = 32
+        self,
+        pcd: NDArray[np.float64],
+        # rgb: NDArray[np.float64],
+        *,
+        threads: int = 32
     ):
-        if pcd.shape[0] != rgb.shape[0]:
-            raise ValueError("Point cloud and RGB must have the same number of points.")
+        # if pcd.shape[0] != rgb.shape[0]:
+        #     raise ValueError("Point cloud and RGB must have the same number of points.")
 
         self._pcd = small_gicp.PointCloud(pcd)
         self._kdtree = None

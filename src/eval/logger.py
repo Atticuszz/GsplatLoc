@@ -1,11 +1,10 @@
 from datetime import datetime
 
-import kornia
 import torch
-import wandb
 from matplotlib import pyplot as plt
 from torch import Tensor
 
+import wandb
 from src.pose_estimation.gemoetry import compute_silhouette_diff
 
 

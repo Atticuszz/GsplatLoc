@@ -21,8 +21,13 @@
 
 normalization for depth and rgb
 
-7. [ ] forward method ,DS for pcd
-not clean
-8. [ ] and remove combination of pcd to unproject with unprojecting total that  closed 
+1. [ ] forward method ,
+   - [x] DS for pcd not clean
+2. [ ] and remove combination of pcd to unproject with unprojecting total that  closed 
 
-9. faiss nns can computing n pcd together on gpu for pytorch adam
+3. [x]faiss nns can compute n pcd together on gpu for pytorch adam
+   - not work ,so change to iter small_gicp kdtree
+
+4. [x]use kornia build gicp
+5. [ ]GICPJacobianApprox building
+4. change R as four angles 
