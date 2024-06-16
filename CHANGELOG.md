@@ -2,7 +2,30 @@
 
 
 
+## v0.3.0 (2024-06-16)
+
+### Chore
+
+* chore: GICPJacobianApprox building ([`bd3badc`](https://github.com/Atticuszz/AB_GICP/commit/bd3badcac675c3de7ec4413efab00cb595c1070f))
+
+* chore: Update README.md ([`47faf50`](https://github.com/Atticuszz/AB_GICP/commit/47faf5002d65fdfd787b0d0dc56bb7ac7d29b5d7))
+
+* chore: Update README.md ([`55c5384`](https://github.com/Atticuszz/AB_GICP/commit/55c5384285df558864b24ce91e434e5078600f9a))
+
+### Feature
+
+* feat: GICPJacobianApprox building finished ([`1e1b896`](https://github.com/Atticuszz/AB_GICP/commit/1e1b8965c975a0e77611377d37ca3a8625115f0a))
+
+### Fix
+
+* fix: reshape pcd from h,w,4 to h*w,4 ([`d855924`](https://github.com/Atticuszz/AB_GICP/commit/d855924d406b1cf67e8bef83602a0a27f0544adb))
+
+
 ## v0.2.3 (2024-06-10)
+
+### Chore
+
+* chore(release): bump version to v0.2.3 ([`152f026`](https://github.com/Atticuszz/AB_GICP/commit/152f02621862c1af6cddefff576ee05441475020))
 
 ### Fix
 
