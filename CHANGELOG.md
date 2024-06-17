@@ -2,9 +2,18 @@
 
 
 
+## v0.4.0 (2024-06-17)
+
+### Feature
+
+* feat: add knnsearch keops and knn tests ([`2f57ae7`](https://github.com/Atticuszz/AB_GICP/commit/2f57ae7c50db498055034efb06f673965bcc180b))
+
+
 ## v0.3.0 (2024-06-16)
 
 ### Chore
+
+* chore(release): bump version to v0.3.0 ([`6b5120c`](https://github.com/Atticuszz/AB_GICP/commit/6b5120cf51c6eeb82c3dd2fb3f1a15bd820303a5))
 
 * chore: GICPJacobianApprox building ([`bd3badc`](https://github.com/Atticuszz/AB_GICP/commit/bd3badcac675c3de7ec4413efab00cb595c1070f))
 
