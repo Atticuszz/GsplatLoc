@@ -127,13 +127,11 @@ class GICPModel(nn.Module):
         #     else torch.eye(4, dtype=torch.float64, device=device)
         # )
 
-        # small_gicp wrapped point clouds
-        self.src_pcd = src_pcd
-        self.tar_pcd = tar_pcd
-
         # tensorize the point clouds
         self.src_points = to_tensor(src_pcd.points, device=device)
         self.tar_points = to_tensor(tar_pcd.points, device=device)
+        # self.tar_knn = KnnSearch(self.tar_points[:, :3].contiguous())
+        self.tar_knn = tar_pcd.kdtree
         self.covs_src = to_tensor(src_pcd.covs, device=device)
         self.covs_tar = to_tensor(tar_pcd.covs, device=device)
 
@@ -142,8 +140,8 @@ class GICPModel(nn.Module):
         transformation = construct_full_pose(rotation, self.translation)
         # batch_knn for preprocessed point clouds
         transformed_src_points = torch.matmul(self.src_points, transformation)
-        nearest_indices, _ = self.tar_pcd.kdtree.batch_nns_search(
-            transformed_src_points.detach().cpu().numpy()
+        nearest_indices, _ = self.tar_knn.batch_nns_search(
+            transformed_src_points[:, :3].detach().cpu().numpy()
         )
         nearest_indices = to_tensor(nearest_indices, device=device, dtype=torch.long)
 
@@ -195,9 +193,10 @@ class GICPModel(nn.Module):
 #     return loss.item()
 
 
-def training(tar_pcd, src_pcd, num_epochs=100):
+def training(tar_pcd, src_pcd, num_epochs=1000):
     model = GICPModel(tar_pcd, src_pcd)
-    optimizer = optim.LBFGS(model.parameters(), lr=1e-3, max_iter=10, history_size=100)
+    optimizer = optim.LBFGS(model.parameters(), lr=1e-3, max_iter=100, history_size=50)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min")
 
     def closure():
         optimizer.zero_grad()
@@ -209,12 +208,17 @@ def training(tar_pcd, src_pcd, num_epochs=100):
         for name, param in model.named_parameters():
             if param.grad is not None:
                 print(f"Gradient of {name} has norm: {param.grad.norm().item()}")
+        lr = optimizer.param_groups[0]["lr"]
+        print(f"last lr: {lr}")
         start = default_timer()
         optimizer.step(closure)  # 注意：LBFGS 需要一个闭包来重新计算模型
         loss = closure()  # 重新计算损失
+        scheduler.step(loss)
         end = default_timer() - start
 
-        print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss.item()}, Time: {end:.6f}s")
+        print(
+            f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss.item()}, Time: {end:.6f}s\n"
+        )
 
     return loss.item()
 

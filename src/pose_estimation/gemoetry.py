@@ -1,8 +1,8 @@
 import kornia
 import torch
+from pykeops.torch import LazyTensor
 from torch import Tensor
 import kornia.geometry.conversions as KG
-
 from src.pose_estimation import DEVICE
 
 
@@ -204,3 +204,35 @@ def rotation_matrix_to_quaternion(rotation_matrix: Tensor) -> Tensor:
         The quaternion with dimensions [4].
     """
     return KG.rotation_matrix_to_quaternion(rotation_matrix)
+
+
+class KnnSearch:
+    def __init__(self, dataset: torch.Tensor):
+        self.dataset = dataset
+        # Convert dataset to a KeOps LazyTensor
+        self.dataset_k = LazyTensor(dataset[:, None, :])  # (N, 1, D)
+
+    def search(
+        self, query_points: torch.Tensor, k: int
+    ) -> (torch.Tensor, torch.Tensor):
+        if query_points.device.type != self.dataset.device.type:
+            raise ValueError("Query points and dataset must be on the same device.")
+        if not query_points.shape[-1] == self.dataset.shape[-1]:
+            raise ValueError(
+                "Query points and dataset must have the same number of dimensions."
+            )
+
+        # Convert query points to a KeOps LazyTensor
+        query_k = LazyTensor(query_points[None, :, :])  # (1, M, D)
+
+        # Compute squared L2 distance using KeOps
+        D_ij = ((self.dataset_k - query_k) ** 2).sum(
+            -1
+        )  # (N, M) symbolic matrix of squared distances
+
+        # Find the k nearest neighbors using argKmin
+        k_indices = D_ij.argKmin(
+            K=k, dim=1
+        )  # (M, k) index tensor of the k nearest neighbors
+
+        return k_indices

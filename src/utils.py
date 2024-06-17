@@ -68,15 +68,12 @@ def depth_to_colormap(depth_image: NDArray):
     return depth_colormap
 
 
-def to_tensor(
-    data: NDArray[np.float64] | list[float],
-    device,
-    requires_grad: bool = False,
-    dtype=torch.float64,
-) -> torch.Tensor:
+def to_tensor(data, device, requires_grad=False, dtype=torch.float64):
     """
-    Convert numpy array to pytorch tensor.
+    Convert numpy array or list to a PyTorch tensor.
     """
     if isinstance(data, list):
         data = np.array(data)
-    return torch.tensor(data, dtype=dtype, device=device, requires_grad=requires_grad)
+    if isinstance(data, np.ndarray):
+        data = torch.as_tensor(data, dtype=dtype, device=device)  # More efficient
+    return data.requires_grad_(requires_grad)
