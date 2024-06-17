@@ -1,8 +1,9 @@
 import kornia
+import kornia.geometry.conversions as KG
 import torch
 from pykeops.torch import LazyTensor
 from torch import Tensor
-import kornia.geometry.conversions as KG
+
 from src.pose_estimation import DEVICE
 
 
@@ -48,7 +49,7 @@ def project_depth(depth: Tensor, pose: Tensor, intrinsics: Tensor) -> Tensor:
     X = (grid_x - intrinsics[0, 2]) * Z / intrinsics[0, 0]
     Y = (grid_y - intrinsics[1, 2]) * Z / intrinsics[1, 1]
 
-    # Create homogenous coordinates
+    # Create homogeneous coordinates
     ones = torch.ones_like(Z)
     pcd_camera = torch.stack((X, Y, Z, ones), dim=-1)
 
@@ -206,7 +207,7 @@ def rotation_matrix_to_quaternion(rotation_matrix: Tensor) -> Tensor:
     return KG.rotation_matrix_to_quaternion(rotation_matrix)
 
 
-class KnnSearch:
+class KnnSearchKeOp3:
     def __init__(self, dataset: torch.Tensor):
         self.dataset = dataset
         # Convert dataset to a KeOps LazyTensor

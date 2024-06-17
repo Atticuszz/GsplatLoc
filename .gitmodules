@@ -5,3 +5,6 @@
 	path = thirdparty/torchimize
 	url = git@github.com:SupaVision/torchimize.git
 
+[submodule "thirdparty/pytorch3d"]
+	path = thirdparty/pytorch3d
+	url = git@github.com:facebookresearch/pytorch3d.git
