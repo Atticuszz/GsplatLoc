@@ -38,4 +38,7 @@ normalization for depth and rgb
 3. [ ] implement for LM optimizer
 4. [ ] torch.compile for funcs
 https://pytorch.org/tutorials/intermediate/torch_compile_tutorial.html#basic-usage
-   
+
+try gicp lm ,then add with gs_splatting
+## Main Idea 
+1. combine gicp loss into gs_splating
