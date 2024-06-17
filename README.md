@@ -29,5 +29,11 @@ normalization for depth and rgb
    - not work ,so change to iter small_gicp kdtree
 
 4. [x]use kornia build gicp
-5. [ ]GICPJacobianApprox building
-4. change R as four angles 
+5. [x]GICPJacobianApprox building
+
+1. [ ] select optimizer
+   - [ ]LGBS learn slow ?
+
+2. [x]change R as four angles
+   
+   

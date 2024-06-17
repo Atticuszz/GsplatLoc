@@ -195,8 +195,8 @@ class GICPModel(nn.Module):
 
 def training(tar_pcd, src_pcd, num_epochs=1000):
     model = GICPModel(tar_pcd, src_pcd)
-    optimizer = optim.LBFGS(model.parameters(), lr=1e-3, max_iter=100, history_size=50)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min")
+    optimizer = optim.LBFGS(model.parameters(), lr=1e-3, max_iter=20, history_size=200)
+    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min")
 
     def closure():
         optimizer.zero_grad()
@@ -213,7 +213,7 @@ def training(tar_pcd, src_pcd, num_epochs=1000):
         start = default_timer()
         optimizer.step(closure)  # 注意：LBFGS 需要一个闭包来重新计算模型
         loss = closure()  # 重新计算损失
-        scheduler.step(loss)
+        # scheduler.step(loss)
         end = default_timer() - start
 
         print(
