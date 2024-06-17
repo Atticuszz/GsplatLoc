@@ -35,5 +35,7 @@ normalization for depth and rgb
    - [ ]LGBS learn slow ?
 
 2. [x]change R as four angles
-   
+3. [ ] implement for LM optimizer
+4. [ ] torch.compile for funcs
+https://pytorch.org/tutorials/intermediate/torch_compile_tutorial.html#basic-usage
    
