@@ -3,13 +3,14 @@ from timeit import default_timer
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.autograd import Function
 from kornia.geometry.conversions import vector_to_skew_symmetric_matrix as skew
+from torch.autograd import Function
+
 from src.gicp.pcd import PointClouds
-from src.pose_estimation.gemoetry import (
-    rotation_matrix_to_quaternion,
-    quaternion_to_rotation_matrix,
+from src.pose_estimation.geometry import (
     construct_full_pose,
+    quaternion_to_rotation_matrix,
+    rotation_matrix_to_quaternion,
 )
 from src.slam_data import Replica, RGBDImage
 from src.utils import to_tensor
@@ -140,7 +141,7 @@ class GICPModel(nn.Module):
         transformation = construct_full_pose(rotation, self.translation)
         # batch_knn for preprocessed point clouds
         transformed_src_points = torch.matmul(self.src_points, transformation)
-        nearest_indices, _ = self.tar_knn.batch_nns_search(
+        nearest_indices, _ = self.tar_knn.batch_nearest_neighbor_search(
             transformed_src_points[:, :3].detach().cpu().numpy()
         )
         nearest_indices = to_tensor(nearest_indices, device=device, dtype=torch.long)
@@ -195,7 +196,13 @@ class GICPModel(nn.Module):
 
 def training(tar_pcd, src_pcd, num_epochs=1000):
     model = GICPModel(tar_pcd, src_pcd)
-    optimizer = optim.LBFGS(model.parameters(), lr=1e-3, max_iter=20, history_size=200)
+    optimizer = optim.LBFGS(
+        model.parameters(),
+        lr=1e-2,
+        max_iter=50,
+        history_size=200,
+        line_search_fn="strong_wolfe",
+    )
     # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min")
 
     def closure():
