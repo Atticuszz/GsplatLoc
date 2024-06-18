@@ -1,13 +1,34 @@
 # CHANGELOG
 
+## v0.4.1 (2024-06-18)
 
+### Chore
+
+* chore: add submodules ([`2c6b690`](https://github.com/Atticuszz/AB_GICP/commit/2c6b690b5c7de555529d610345d6b15dce69a881))
+
+* chore: Update README.md ([`6df36a3`](https://github.com/Atticuszz/AB_GICP/commit/6df36a387f6297273e3ab3d90628cf48dd8f6350))
+
+* chore: Update README.md ([`851a47c`](https://github.com/Atticuszz/AB_GICP/commit/851a47c82f7f8328beb747fb59896fa77caf6136))
+
+* chore: run pre-commits ([`47e7df4`](https://github.com/Atticuszz/AB_GICP/commit/47e7df4c35d293e9ac3e9bc89d2573adbdcd7bb8))
+
+* chore: update README.md ([`c00503d`](https://github.com/Atticuszz/AB_GICP/commit/c00503da4f9677ffb937ecc59baa26eb1fe85a61))
+
+* chore: update README.md ([`fd9a040`](https://github.com/Atticuszz/AB_GICP/commit/fd9a04031628997244dfe7ff0dd04fc55b5d9be5))
+
+### Fix
+
+* fix: small_gicp batch_knn api and add submodules ([`f80c0eb`](https://github.com/Atticuszz/AB_GICP/commit/f80c0eb90db7c27bf9c47b62a4a599fd4e24b897))
 
 ## v0.4.0 (2024-06-17)
+
+### Chore
+
+* chore(release): bump version to v0.4.0 ([`e038e9f`](https://github.com/Atticuszz/AB_GICP/commit/e038e9f10d5cb8aad4b458c67e83360f7b6df6d5))
 
 ### Feature
 
 * feat: add knnsearch keops and knn tests ([`2f57ae7`](https://github.com/Atticuszz/AB_GICP/commit/2f57ae7c50db498055034efb06f673965bcc180b))
-
 
 ## v0.3.0 (2024-06-16)
 
@@ -29,7 +50,6 @@
 
 * fix: reshape pcd from h,w,4 to h*w,4 ([`d855924`](https://github.com/Atticuszz/AB_GICP/commit/d855924d406b1cf67e8bef83602a0a27f0544adb))
 
-
 ## v0.2.3 (2024-06-10)
 
 ### Chore
@@ -39,7 +59,6 @@
 ### Fix
 
 * fix: Update gemoetry.py ([`20a8122`](https://github.com/Atticuszz/AB_GICP/commit/20a8122bf44a81975c856750ae92a5d1017284cb))
-
 
 ## v0.2.2 (2024-06-09)
 
@@ -51,7 +70,6 @@
 
 * fix: model.py Merge point clouds using a differentiable method ([`c9082db`](https://github.com/Atticuszz/AB_GICP/commit/c9082db821ef56042e7e14c43c3ea15c0b43e23c))
 
-
 ## v0.2.1 (2024-06-09)
 
 ### Chore
@@ -61,7 +79,6 @@
 ### Fix
 
 * fix: make unproject_depth func differentiable ([`11aa2a3`](https://github.com/Atticuszz/AB_GICP/commit/11aa2a3ad73d9db41418b58406397ae3099e509f))
-
 
 ## v0.2.0 (2024-06-09)
 
@@ -82,7 +99,6 @@
 ### Unknown
 
 * Update README.md ([`2fdc295`](https://github.com/Atticuszz/AB_GICP/commit/2fdc29576fe1b7e0814539ffbf3ecc47b6dfe594))
-
 
 ## v0.1.0 (2024-06-07)
 
@@ -123,7 +139,6 @@
 * fix: config experiment envs ([`24c1560`](https://github.com/Atticuszz/AB_GICP/commit/24c15608e9ee623b4f004a53ec8415ec6dcf68f7))
 
 * fix: config error in grip_downsample ([`160830c`](https://github.com/Atticuszz/AB_GICP/commit/160830cf843f93b97e7886365da816a962c60051))
-
 
 ## v0.0.1 (2024-05-24)
 
