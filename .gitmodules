@@ -7,3 +7,6 @@
 [submodule "thirdparty/pixloc"]
 	path = thirdparty/pixloc
 	url = git@github.com:SupaVision/pixloc.git
+[submodule "thirdparty/gsplat"]
+	path = thirdparty/gsplat
+	url = git@github.com:SupaVision/gsplat.git
