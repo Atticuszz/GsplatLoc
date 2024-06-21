@@ -7,7 +7,7 @@ readme = "README.md"
 packages = [{include = "src", from = "."}]
 
 [tool.poetry.dependencies]
-python = ">=3.10,<3.11.0 || >3.11.0"
+python = ">=3.10,<3.11.0 || >3.11.0,<4.0"
 opencv-contrib-python-headless = "^4.9.0.80"
 matplotlib = "^3.8.4"
 natsort = "^8.4.0"
@@ -20,10 +20,14 @@ open3d = "^0.18.0"
 tqdm = "^4.66.4"
 scipy = "^1.13.0"
 wandb = "^0.17.0"
-#small-gicp = "^0.0.6"
+small-gicp = "^0.1.1"
 torch = "^2.3.0"
 kornia = "^0.7.2"
 pykeops = "^2.2.3"
+gsplat = "^1.0.0"
+imageio = "^2.34.1"
+nerfview = "^0.0.3"
+torchmetrics = "^1.4.0.post0"
 
 
 
