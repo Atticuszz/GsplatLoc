@@ -4,8 +4,9 @@ import numpy as np
 import small_gicp
 import torch
 from numpy._typing import NDArray
-from sklearn.neighbors import NearestNeighbors
 from torch import Tensor
+
+from src.pose_estimation import DEVICE
 from src.utils import to_tensor
 
 
@@ -75,11 +76,19 @@ class KnnSearch:
             raise TypeError("knn search data must be tensor or numpy")
 
 
+# def knn(x: Tensor, K: int = 4) -> Tensor:
+#     x_np = x.cpu().numpy()
+# model = NearestNeighbors(n_neighbors=K, metric="euclidean").fit(x_np)
+# distances, _ = model.kneighbors(x_np)
+#     return torch.from_numpy(distances).to(x)
+
+
 def knn(x: Tensor, K: int = 4) -> Tensor:
     x_np = x.cpu().numpy()
-    model = NearestNeighbors(n_neighbors=K, metric="euclidean").fit(x_np)
-    distances, _ = model.kneighbors(x_np)
-    return torch.from_numpy(distances).to(x)
+    pcd = small_gicp.PointCloud(x_np)
+    model = small_gicp.KdTree(pcd, num_threads=32)
+    _, distances = model.batch_knn_search(x_np, k=K, num_threads=64)
+    return to_tensor(distances, device=DEVICE, requires_grad=True)
 
 
 def rgb_to_sh(rgb: Tensor) -> Tensor:
