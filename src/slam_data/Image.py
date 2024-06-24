@@ -1,62 +1,164 @@
 import numpy as np
+import torch
 from numpy.compat import long
 from numpy.typing import NDArray
+from torch import Tensor
+
+from src.pose_estimation import DEVICE
+from src.utils import to_tensor
 
 
 class RGBDImage:
+    """
+    Initialize an RGBDImage with depth and camera intrinsic matrix, all as Tensors.
+
+    Parameters
+    ----------
+    depth: np.ndarray
+        The depth image as a numpy array.
+    K: np.ndarray
+        Camera intrinsic matrix as a numpy array.
+    depth_scale: float
+        Factor by which the depth values are scaled.
+    pose: np.ndarray | None, optional
+        Camera pose matrix in world coordinates as a numpy array.
+    """
+
     def __init__(
         self,
         rgb: np.ndarray,
         depth: np.ndarray,
         K: np.ndarray,
         depth_scale: float,
-        pose: NDArray[np.float64] | None = None,
+        pose: NDArray[np.float64],
     ):
         if rgb.shape[0] != depth.shape[0] or rgb.shape[1] != depth.shape[1]:
             raise ValueError(
                 "RGB's height and width must match Depth's height and width."
             )
-        self._rgb = rgb
-        self._depth = depth / depth_scale
-        self._K = K
-        self._pose: NDArray[np.float64] | None = pose
+        self._rgb = to_tensor(rgb, device=DEVICE, requires_grad=True)
+        self._depth = to_tensor(depth / depth_scale, device=DEVICE, requires_grad=True)
+        self._K = to_tensor(K, device=DEVICE, requires_grad=True)
+
+        self._pose = to_tensor(pose, device=DEVICE, requires_grad=True)
+        self._pcd = self._project_pcds(include_homogeneous=False)
 
     @property
-    def color(self):
-        return self._rgb
-
-    @property
-    def depth(self) -> NDArray[np.float64]:
+    def color(self) -> Tensor:
         """
         Returns
         -------
-        depth: NDArray[np.float64], shape=(h, w)
+        color: Tensor[torch.float64], shape=(h, w, 3)
+        """
+        return self._rgb
+
+    @property
+    def depth(self) -> Tensor:
+        """
+        Returns
+        -------
+        depth: Tensor[torch.float64], shape=(h, w)
             Depth image in meters.
         """
 
         return self._depth
 
+    @depth.setter
+    def depth(self, new_depth: Tensor):
+        if new_depth.dim() != 2:
+            raise ValueError("Depth must be a 2-dimensional matrix.")
+        self._depth = new_depth
+
     @property
-    def K(self) -> NDArray[np.float64]:
+    def K(self) -> Tensor:
         """
         Returns
         -------
-        K: NDArray[np.float64], shape=(3, 3)
+        K: Tensor[torch.float64], shape=(3, 3)
             Camera intrinsic matrix.
         """
         return self._K
 
+    @K.setter
+    def K(self, new_K: Tensor):
+        if new_K.shape != (3, 3):
+            raise ValueError("Camera intrinsic matrix K must be a 3x3 matrix.")
+        self._K = new_K
+
     @property
-    def pose(self) -> NDArray[np.float64] | None:
+    def pose(self) -> Tensor:
         """
         Returns
         -------
-        pose: NDArray[np.float64] | None, shape=(4, 4)
+
+        pose: Tensor[torch.float64] | None, shape=(4, 4)
             Camera pose matrix in world coordinates.
         """
         return self._pose
 
-    def color_pcds(
+    @pose.setter
+    def pose(self, new_pose: Tensor):
+        if new_pose.shape != (4, 4):
+            raise ValueError("Pose must be a 4x4 matrix and Tensor.")
+        self._pose = new_pose
+
+    @property
+    def points(self) -> Tensor:
+        """
+        in camera pcd
+        Returns
+        -------
+        pcd : Tensor shape=(h*w, 3)
+        """
+        return self._pcd
+
+    @points.setter
+    def points(self, new_points: Tensor):
+        if new_points.shape[1] != 3:
+            raise ValueError(
+                "Points must be a 2-dimensional tensor with the second dimension of size 3."
+            )
+        self._pcd = new_points
+
+    def _project_pcds(
+        self,
+        include_homogeneous: bool = True,
+    ) -> Tensor:
+        """
+        Project depth map to point clouds using intrinsic matrix.
+
+        Parameters
+        ----------
+        include_homogeneous: bool, optional
+            Whether to include the homogeneous coordinate (default True).
+
+        Returns
+        -------
+        points: Tensor
+            The generated point cloud, shape=(h*w, 3) or (h*w, 4).
+        """
+        h, w = self.depth.shape
+        i_indices, j_indices = torch.meshgrid(
+            torch.arange(h, device=DEVICE),
+            torch.arange(w, device=DEVICE),
+            indexing="ij",
+        )
+        x = (j_indices - self.K[0, 2]) * self.depth / self.K[0, 0]
+        y = (i_indices - self.K[1, 2]) * self.depth / self.K[1, 1]
+        z = self.depth
+
+        points = torch.stack((x, y, z), dim=-1)  # shape (h, w, 3)
+
+        if include_homogeneous:
+            ones = torch.ones((h, w, 1), device=DEVICE)
+            points = torch.cat((points, ones), dim=-1)  # shape (h, w, 4)
+
+        # Flatten the points to shape (h*w, 3) or (h*w, 4)
+        points = points.reshape(-1, points.shape[-1])
+
+        return points
+
+    def _color_pcds(
         self,
         colored: bool = False,  # Optional color image
         include_homogeneous: bool = True,
@@ -101,7 +203,7 @@ class RGBDImage:
 
         return points
 
-    def pointclouds(
+    def _pointclouds(
         self, stride: int = 1, include_homogeneous=True
     ) -> NDArray[np.float64]:
         """
@@ -130,7 +232,7 @@ class RGBDImage:
         else:
             return points.reshape(-1, 3)
 
-    def camera_to_world(
+    def _camera_to_world(
         self,
         c2w: np.ndarray,
         pcd_c: NDArray[np.float64] | None = None,
@@ -142,7 +244,7 @@ class RGBDImage:
         :return: Nx4 numpy array of transformed 3D points in world coordinates
         """
         if pcd_c is None:
-            points_camera = self.pointclouds()
+            points_camera = self._pointclouds()
         else:
             points_camera = pcd_c[:, :4]
         return points_camera @ c2w.T
