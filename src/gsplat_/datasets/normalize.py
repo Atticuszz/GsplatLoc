@@ -1,7 +1,31 @@
 import torch
 
 
-def similarity_from_cameras(c2w, strict_scaling=False, center_method="focus"):
+def similarity_from_cameras(
+    c2w: torch.Tensor, strict_scaling: bool = False, center_method: str = "focus"
+) -> torch.Tensor:
+    """
+    Calculate a similarity transformation that aligns and scales camera positions.
+
+    Parameters
+    ----------
+    c2w : torch.Tensor
+        A batch of camera-to-world transformation matrices of shape (N, 4, 4).
+    strict_scaling : bool, optional
+        If True, use the maximum distance for scaling, otherwise use the median.
+    center_method : str, optional
+        Method for centering the scene, either "focus" for focusing method or "poses" for camera poses centering.
+
+    Returns
+    -------
+    torch.Tensor
+        A 4x4 similarity transformation matrix that aligns, centers, and scales the input cameras.
+
+    Raises
+    ------
+    ValueError
+        If the `center_method` is not recognized.
+    """
     t = c2w[:, :3, 3]
     R = c2w[:, :3, :3]
 
@@ -12,7 +36,7 @@ def similarity_from_cameras(c2w, strict_scaling=False, center_method="focus"):
 
     up_camspace = torch.tensor([0.0, -1.0, 0.0], device=R.device)
     c = torch.dot(up_camspace, world_up)
-    cross = torch.cross(world_up, up_camspace)
+    cross = torch.linalg.cross(world_up, up_camspace)
     skew = torch.tensor(
         [
             [0.0, -cross[2], cross[1]],
@@ -54,7 +78,20 @@ def similarity_from_cameras(c2w, strict_scaling=False, center_method="focus"):
     return transform
 
 
-def align_principle_axes(point_cloud):
+def align_principle_axes(point_cloud: torch.Tensor) -> torch.Tensor:
+    """
+    Align the principal axes of a point cloud to the coordinate axes using PCA.
+
+    Parameters
+    ----------
+    point_cloud : torch.Tensor
+        Nx3 tensor containing the 3D point cloud.
+
+    Returns
+    -------
+    torch.Tensor
+        A 4x4 transformation matrix that aligns the point cloud along principal axes.
+    """
     # Compute centroid
     centroid = torch.median(point_cloud, dim=0).values
 
@@ -86,35 +123,47 @@ def align_principle_axes(point_cloud):
     return transform
 
 
-def transform_points(matrix, points):
-    """Transform points using a SE(4) matrix.
+def transform_points(matrix: torch.Tensor, points: torch.Tensor) -> torch.Tensor:
+    """
+    Transform points using a SE(3) transformation matrix.
 
-    Args:
-        matrix: 4x4 SE(4) matrix
-        points: Nx3 array of points
+    Parameters
+    ----------
+    matrix : torch.Tensor
+        A 4x4 SE(3) transformation matrix.
+    points : torch.Tensor
+        An Nx3 tensor of points to be transformed.
 
-    Returns:
-        Nx3 array of transformed points
+    Returns
+    -------
+    torch.Tensor
+        An Nx3 tensor of transformed points.
     """
     assert matrix.shape == (4, 4)
     assert len(points.shape) == 2 and points.shape[1] == 3
     return torch.addmm(matrix[:3, 3], points, matrix[:3, :3].t())
 
 
-def transform_cameras(matrix, camtoworlds):
-    """Transform cameras using a SE(4) matrix.
+def transform_cameras(matrix: torch.Tensor, c2w: torch.Tensor) -> torch.Tensor:
+    """
+    Apply a SE(3) transformation to a set of camera-to-world matrices.
 
-    Args:
-        matrix: 4x4 SE(4) matrix
-        camtoworlds: Nx4x4 array of camera-to-world matrices
+    Parameters
+    ----------
+    matrix : torch.Tensor
+        A 4x4 SE(3) transformation matrix.
+    c2w : torch.Tensor
+        An Nx4x4 tensor of camera-to-world matrices.
 
-    Returns:
-        Nx4x4 array of transformed camera-to-world matrices
+    Returns
+    -------
+    torch.Tensor
+        An Nx4x4 tensor of transformed camera-to-world matrices.
     """
     assert matrix.shape == (4, 4)
-    assert len(camtoworlds.shape) == 3 and camtoworlds.shape[1:] == (4, 4)
+    assert len(c2w.shape) == 3 and c2w.shape[1:] == (4, 4)
     # Perform the matrix multiplication with einsum for better control
-    transformed = torch.einsum("ki,nij->nkj", matrix, camtoworlds)
+    transformed = torch.einsum("ki,nij->nkj", matrix, c2w)
 
     # Normalize the 3x3 rotation matrices to maintain scale: Use the norm of the first row
     scaling = torch.norm(transformed[:, 0, :3], p=2, dim=1, keepdim=True)
