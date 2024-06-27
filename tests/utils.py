@@ -5,3 +5,10 @@
 @Date Created : 12/01/2024
 @Description  :
 """
+
+import torch
+
+from src.pose_estimation import DEVICE
+
+print(torch.version.cuda)
+print(DEVICE)

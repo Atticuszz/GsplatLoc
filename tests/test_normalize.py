@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from src.gsplat_.datasets import normalize, normalize_np
+from src.my_gsplat.datasets import normalize, normalize_np
 
 
 def test_normalize_functions():

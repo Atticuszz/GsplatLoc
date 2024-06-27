@@ -1,6 +1,6 @@
 import pytest
 
-from src.slam_data import Replica, RGBDImage
+from src.my_gsplat.structure import Replica, RGBDImage
 
 
 @pytest.fixture

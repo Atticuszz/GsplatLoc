@@ -5,10 +5,9 @@ import torch
 from scipy.spatial import KDTree
 from sklearn.neighbors import NearestNeighbors
 
-from src.gsplat_.utils import KnnSearch
+from src.my_gsplat.utils import KnnSearch, to_tensor
 
 # from src.pose_estimation.geometry import KnnSearchKeOp3
-from src.utils import to_tensor
 
 
 def compute_accuracy(truth, predictions):
