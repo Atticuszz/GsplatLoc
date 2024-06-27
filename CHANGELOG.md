@@ -1,8 +1,40 @@
 # CHANGELOG
 
+## v0.5.0 (2024-06-27)
+
+### Chore
+
+* chore: add setter for RGBD class property ([`ab8348a`](https://github.com/Atticuszz/AB_GICP/commit/ab8348ac8a61ff56f7ca58932cb6f6f5faeecb90))
+
+* chore: add slice func for dataloader and tested ([`2e3390a`](https://github.com/Atticuszz/AB_GICP/commit/2e3390aa9468e9ed0092545637aaec7df61ffec3))
+
+* chore: add func docs for normalize_torch ([`4567211`](https://github.com/Atticuszz/AB_GICP/commit/45672110ff44f4f388107ea38d9f9af190be7058))
+
+* chore: add tests of knn and normalize_torch ([`3c3ac78`](https://github.com/Atticuszz/AB_GICP/commit/3c3ac789defb3ae9edbb4ce25cf8819637329e89))
+
+* chore: update workflows ([`44bc981`](https://github.com/Atticuszz/AB_GICP/commit/44bc9818732b6641701db306f2370cc301a30349))
+
+* chore: add knn test ([`fd49eda`](https://github.com/Atticuszz/AB_GICP/commit/fd49edadf8e30c9c6217e994ad8014e6eda7d043))
+
+* chore: add knn test ([`941c83e`](https://github.com/Atticuszz/AB_GICP/commit/941c83eeebe59aa889af9ee3f8e0324c86c799c2))
+
+* chore: add knn test ([`b407caa`](https://github.com/Atticuszz/AB_GICP/commit/b407caac1f014f5d59baeb88ca3bf8becaeec990))
+
+* chore: add gsplat submodule ([`7944f36`](https://github.com/Atticuszz/AB_GICP/commit/7944f36b4e97bfa0a77a81429df2229848149aaa))
+
+### Feature
+
+* feat: add gsplat trainer.py ([`920b006`](https://github.com/Atticuszz/AB_GICP/commit/920b006ce949c482e57313dcc02a54366cac44f4))
+
+### Fix
+
+* fix: add tests ([`9fa896f`](https://github.com/Atticuszz/AB_GICP/commit/9fa896f411622f336e1f724cc1a379357d08fb37))
+
 ## v0.4.1 (2024-06-18)
 
 ### Chore
+
+* chore(release): bump version to v0.4.1 ([`51cb593`](https://github.com/Atticuszz/AB_GICP/commit/51cb5935e08ad9866ee93101bbf3ccdaf619b2fd))
 
 * chore: add submodules ([`2c6b690`](https://github.com/Atticuszz/AB_GICP/commit/2c6b690b5c7de555529d610345d6b15dce69a881))
 
