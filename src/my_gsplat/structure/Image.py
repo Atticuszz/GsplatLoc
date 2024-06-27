@@ -4,8 +4,7 @@ from numpy.compat import long
 from numpy.typing import NDArray
 from torch import Tensor
 
-from src.pose_estimation import DEVICE
-from src.utils import to_tensor
+from ..utils import DEVICE, to_tensor
 
 
 class RGBDImage:
@@ -244,7 +243,7 @@ class RGBDImage:
         :return: Nx4 numpy array of transformed 3D points in world coordinates
         """
         if pcd_c is None:
-            points_camera = self._pointclouds()
+            points_camera = self._pcd
         else:
             points_camera = pcd_c[:, :4]
         return points_camera @ c2w.T

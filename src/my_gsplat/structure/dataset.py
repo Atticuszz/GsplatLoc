@@ -58,26 +58,14 @@ class DataLoaderBase:
         """
         raise NotImplementedError
 
-    def scene_scale(self, end: int, start: int = 0) -> float:
-        # size of the scene measured by cameras
-        if self.poses is None:
-            raise ValueError("load poses before calculate scene scale")
-
-        camera_locations = self.poses[start:end, :3, 3]
-        assert len(camera_locations) == 2
-        scene_center = np.mean(camera_locations, axis=0)
-        dists = np.linalg.norm(camera_locations - scene_center, axis=1)
-        scene_scale = np.max(dists)
-        return scene_scale
-
 
 class Replica(DataLoaderBase):
     def __init__(
         self,
         name: str = "room0",
         *,
-        input_folder: Path = Path(__file__).parents[2] / "Datasets/Replica",
-        cfg_file: Path = Path(__file__).parents[2] / "Datasets/Replica/cam_params.json",
+        input_folder: Path = Path(__file__).parents[3] / "Datasets/Replica",
+        cfg_file: Path = Path(__file__).parents[3] / "Datasets/Replica/cam_params.json",
     ):
         self.name = name
         super().__init__((input_folder / name).as_posix(), cfg_file.as_posix())

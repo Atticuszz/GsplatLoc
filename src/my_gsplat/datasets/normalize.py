@@ -1,6 +1,9 @@
 import torch
 
+from ..structure import RGBDImage
 
+
+@torch.no_grad()
 def similarity_from_cameras(
     c2w: torch.Tensor, strict_scaling: bool = False, center_method: str = "focus"
 ) -> torch.Tensor:
@@ -78,6 +81,7 @@ def similarity_from_cameras(
     return transform
 
 
+@torch.no_grad()
 def align_principle_axes(point_cloud: torch.Tensor) -> torch.Tensor:
     """
     Align the principal axes of a point cloud to the coordinate axes using PCA.
@@ -123,6 +127,7 @@ def align_principle_axes(point_cloud: torch.Tensor) -> torch.Tensor:
     return transform
 
 
+@torch.no_grad()
 def transform_points(matrix: torch.Tensor, points: torch.Tensor) -> torch.Tensor:
     """
     Transform points using a SE(3) transformation matrix.
@@ -144,6 +149,7 @@ def transform_points(matrix: torch.Tensor, points: torch.Tensor) -> torch.Tensor
     return torch.addmm(matrix[:3, 3], points, matrix[:3, :3].t())
 
 
+@torch.no_grad()
 def transform_cameras(matrix: torch.Tensor, c2w: torch.Tensor) -> torch.Tensor:
     """
     Apply a SE(3) transformation to a set of camera-to-world matrices.
@@ -172,3 +178,48 @@ def transform_cameras(matrix: torch.Tensor, c2w: torch.Tensor) -> torch.Tensor:
     )  # Unsqueeze to match the shape for broadcasting
 
     return transformed
+
+
+@torch.no_grad()
+def normalize_dataset_slice(dataset_slice: list[RGBDImage]) -> list[RGBDImage]:
+    all_poses = [rgb_d.pose for rgb_d in dataset_slice]
+    # NOTE: transform to world
+    all_points = [transform_points(rgb_d.pose, rgb_d.points) for rgb_d in dataset_slice]
+    # combine as one scene
+    poses = torch.stack(all_poses, dim=0)
+    points = torch.cat(all_points, dim=0)
+
+    # normalize
+    T1 = similarity_from_cameras(poses)
+    poses = transform_cameras(T1, poses)
+    points = transform_points(T1, points)
+
+    T2 = align_principle_axes(points)
+    poses = transform_cameras(T2, poses)
+    points = transform_points(T2, points)
+
+    # transform = T2 @ T1
+
+    # Update the original data with normalized values
+    start_idx = 0
+    for i, rgb_d in enumerate(dataset_slice):
+        num_points = len(rgb_d.points)
+        rgb_d.pose = poses[i]
+        rgb_d.points = points[start_idx : start_idx + num_points]
+        start_idx += num_points
+
+    return dataset_slice
+
+
+@torch.no_grad()
+def scene_scale(dataset_slice: list[RGBDImage]) -> torch.Tensor:
+    poses = torch.stack([rgb_d.pose for rgb_d in dataset_slice], dim=0)
+
+    camera_locations = poses[:, :3, 3]
+    assert len(camera_locations) == 2, "Exactly two camera locations are required"
+
+    scene_center = torch.mean(camera_locations, dim=0)
+    dists = torch.norm(camera_locations - scene_center, dim=1)
+    scale = torch.max(dists)
+
+    return scale

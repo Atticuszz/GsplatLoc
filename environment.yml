@@ -1,0 +1,39 @@
+name: AB-GICP
+channels:
+  - defaults
+  - conda-forge
+  - nvidia
+  - pytorch
+dependencies:
+  - python=3.10
+#  - cudatoolkit=12.1
+  - matplotlib=3.8.4
+  - natsort=8.4.0
+  - scikit-learn=1.4.2
+  - addict=2.4.0
+  - pandas=2.2.2
+  - mpld3=0.5.10
+  - numpy=1.26.4
+  - tqdm=4.66.4
+  - scipy=1.13.0
+  - scalene=1.5.40
+  # gsplat
+  - imageio
+  - tensorboard
+  - pip
+  - pip:
+    - pyqt6
+    - pre-commit # dev dependency
+    - pytest-cov
+    - pytest
+    - open3d
+    - opencv-contrib-python-headless
+    - wandb
+    - kornia
+  # gsplat
+    - tyro
+    - viser
+    - nerfview
+    - small_gicp
+# conda install pytorch==2.2.1 torchvision==0.17.1 torchaudio==2.2.1 pytorch-cuda=12.1 -c pytorch -c nvidia
+# pip install ./thirdparty/gsplat/.

@@ -1,13 +1,21 @@
+import json
 import random
+from json import JSONEncoder
+from pathlib import Path
 
 import numpy as np
 import small_gicp
 import torch
-from numpy._typing import NDArray
+import yaml
+from numpy.typing import NDArray
 from torch import Tensor
 
-from src.pose_estimation import DEVICE
-from src.utils import to_tensor
+DEVICE = (
+    "cuda"
+    if torch.cuda.is_available()
+    else "mps" if torch.backends.mps.is_available() else "cpu"
+)
+print(f"Using {DEVICE} DEVICE")
 
 
 def normalized_quat_to_rotmat(quat: Tensor) -> Tensor:
@@ -84,8 +92,9 @@ class KnnSearch:
 
 
 def knn(x: Tensor, K: int = 4) -> Tensor:
-    x_np = x.cpu().numpy()
-    pcd = small_gicp.PointCloud(x_np)
+
+    x_np = x.cpu().numpy() if not x.requires_grad else x.detach().cpu().numpy()
+    pcd = small_gicp.PointCloud(x_np.astype(np.float64))
     model = small_gicp.KdTree(pcd, num_threads=32)
     _, distances = model.batch_knn_search(x_np, k=K, num_threads=64)
     return to_tensor(distances, device=DEVICE, requires_grad=True)
@@ -100,3 +109,57 @@ def set_random_seed(seed: int):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+
+
+def as_intrinsics_matrix(intrinsics: list[float]) -> NDArray:
+    """
+    Get matrix representation of intrinsics.
+    :param intrinsics : [fx,fy,cx,cy]
+    :return: K matrix.shape=(3,3)
+    """
+    K = np.eye(3)
+    K[0, 0] = intrinsics[0]
+    K[1, 1] = intrinsics[1]
+    K[0, 2] = intrinsics[2]
+    K[1, 2] = intrinsics[3]
+    return K
+
+
+def load_camera_cfg(cfg_path: str) -> dict:
+    """
+    Load camera configuration from YAML or Json file.
+    """
+    cfg_path = Path(cfg_path)
+    assert cfg_path.exists(), f"File not found: {cfg_path}"
+    with open(cfg_path) as file:
+        if cfg_path.suffix in [".yaml", ".yml"]:
+            cfg = yaml.safe_load(file)
+        elif cfg_path.suffix == ".json":
+            cfg = json.load(file)
+        else:
+            raise TypeError(f"Failed to load cfg via:{cfg_path.suffix}")
+    return cfg
+
+
+def to_tensor(data, device, requires_grad=False, dtype=torch.float32):
+    """
+    Convert numpy array or list to a PyTorch tensor.
+    """
+    if (
+        not isinstance(data, list)
+        and not isinstance(data, np.ndarray)
+        and not torch.is_tensor(data)
+        and not isinstance(data, int)
+    ):
+        raise TypeError("to tensor needs list,np.ndarray or tensor")
+
+    data = torch.as_tensor(data, dtype=dtype, device=device)  # More efficient
+    return data.requires_grad_(requires_grad)
+
+
+class CustomEncoder(JSONEncoder):
+    def default(self, obj):
+        try:
+            return super().default(obj)
+        except TypeError:
+            return str(obj)
