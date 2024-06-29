@@ -10,3 +10,6 @@
 [submodule "thirdparty/gsplat"]
 	path = thirdparty/gsplat
 	url = git@github.com:SupaVision/gsplat.git
+[submodule "thirdparty/SplaTAM"]
+	path = thirdparty/SplaTAM
+	url = git@github.com:spla-tam/SplaTAM.git

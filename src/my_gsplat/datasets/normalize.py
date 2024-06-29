@@ -183,8 +183,9 @@ def transform_cameras(matrix: torch.Tensor, c2w: torch.Tensor) -> torch.Tensor:
 @torch.no_grad()
 def normalize_dataset_slice(dataset_slice: list[RGBDImage]) -> list[RGBDImage]:
     all_poses = [rgb_d.pose for rgb_d in dataset_slice]
-    # NOTE: transform to world
+    # NOTE: transform to world,init with first pose
     all_points = [transform_points(rgb_d.pose, rgb_d.points) for rgb_d in dataset_slice]
+    # all_points = [transform_points(all_poses[0], rgb_d.points) for rgb_d in dataset_slice]
     # combine as one scene
     poses = torch.stack(all_poses, dim=0)
     points = torch.cat(all_points, dim=0)
@@ -205,7 +206,7 @@ def normalize_dataset_slice(dataset_slice: list[RGBDImage]) -> list[RGBDImage]:
     for i, rgb_d in enumerate(dataset_slice):
         num_points = len(rgb_d.points)
         rgb_d.pose = poses[i]
-        rgb_d.points = points[start_idx : start_idx + num_points]
+        rgb_d.points = points[start_idx: start_idx + num_points]
         start_idx += num_points
 
     return dataset_slice
@@ -216,7 +217,7 @@ def scene_scale(dataset_slice: list[RGBDImage]) -> torch.Tensor:
     poses = torch.stack([rgb_d.pose for rgb_d in dataset_slice], dim=0)
 
     camera_locations = poses[:, :3, 3]
-    assert len(camera_locations) == 2, "Exactly two camera locations are required"
+    # assert len(camera_locations) == 2, "Exactly two camera locations are required"
 
     scene_center = torch.mean(camera_locations, dim=0)
     dists = torch.norm(camera_locations - scene_center, dim=1)

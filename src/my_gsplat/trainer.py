@@ -14,14 +14,14 @@ import tqdm
 from gsplat.rendering import rasterization
 
 # from datasets.colmap import Dataset, Parser
-# from datasets.traj import generate_interpolated_path
+from .datasets.traj import generate_interpolated_path
 from torch import Tensor
 from torch.nn import ParameterDict
 from torch.optim import Adam, SparseAdam
 from torch.utils.tensorboard import SummaryWriter
 
 from .base import Config
-from .model import AppearanceOptModule
+from .model import AppearanceOptModule, CameraOptModule
 from .structure import RGBDImage
 from .utils import (
     DEVICE,
@@ -32,63 +32,6 @@ from .utils import (
     set_random_seed,
     to_tensor,
 )
-
-
-def rasterize_splats(
-    splats: ParameterDict,
-    c2ws: Tensor,
-    Ks: Tensor,
-    width: int,
-    height: int,
-    app_module: AppearanceOptModule,
-    app_opt,
-    sh_degree,
-    antialiased,
-    packed,
-    absgrad,
-    sparse_grad,
-    **kwargs,
-) -> tuple[Tensor, Tensor, dict]:
-    means = splats["means3d"]  # [N, 3]
-    # quats = F.normalize(self.splats["quats"], dim=-1)  # [N, 4]
-    # rasterization does normalization internally
-    quats = splats["quats"]  # [N, 4]
-    scales = torch.exp(splats["scales"])  # [N, 3]
-    opacities = torch.sigmoid(splats["opacities"])  # [N,]
-
-    image_ids = kwargs.pop("image_ids", None)
-    if app_opt:
-        colors = app_module(
-            features=splats["features"],
-            embed_ids=image_ids,
-            dirs=means[None, :, :] - c2ws[:, None, :3, 3],
-            sh_degree=kwargs.pop("sh_degree", sh_degree),
-        )
-        colors = colors + splats["colors"]
-        colors = torch.sigmoid(colors)
-    else:
-        colors = torch.cat([splats["sh0"], splats["shN"]], 1)  # [N, K, 3]
-
-    rasterize_mode = "antialiased" if antialiased else "classic"
-    render_colors, render_alphas, info = rasterization(
-        means=means,
-        quats=quats,
-        scales=scales,
-        opacities=opacities,
-        colors=colors,
-        viewmats=torch.linalg.inv(c2ws),  # [C, 4, 4]
-        Ks=Ks,  # [C, 3, 3]
-        width=width,
-        height=height,
-        packed=packed,
-        absgrad=absgrad,
-        sparse_grad=sparse_grad,
-        rasterize_mode=rasterize_mode,
-        **kwargs,
-    )
-    return render_colors, render_alphas, info
-
-
 def create_splats_with_optimizers(
     points: Tensor,  # [N, 3]
     rgbs: Tensor,  # [N, 3]
@@ -188,40 +131,40 @@ class Runner(Config):
 
         # Pose
         self.pose_optimizers = []
-        # if self.pose_opt:
-        #     self.pose_adjust = CameraOptModule(len(self.trainset)).to(DEVICE)
-        #     self.pose_adjust.zero_init()
-        #     self.pose_optimizers = [
-        #         torch.optim.Adam(
-        #             self.pose_adjust.parameters(),
-        #             lr=self.pose_opt_lr * math.sqrt(self.batch_size),
-        #             weight_decay=self.pose_opt_reg,
-        #         )
-        #     ]
+        if self.pose_opt:
+            self.pose_adjust = CameraOptModule(len(self.trainset)).to(DEVICE)
+            self.pose_adjust.zero_init()
+            self.pose_optimizers = [
+                torch.optim.Adam(
+                    self.pose_adjust.parameters(),
+                    lr=self.pose_opt_lr * math.sqrt(self.batch_size),
+                    weight_decay=self.pose_opt_reg,
+                )
+            ]
 
         # if self.pose_noise > 0.0:
         #     self.pose_perturb = CameraOptModule(len(self.trainset)).to(DEVICE)
         #     self.pose_perturb.random_init(self.pose_noise)
 
         self.app_optimizers = []
-        # if self.app_opt:
-        #     self.app_module = AppearanceOptModule(
-        #         len(self.trainset), feature_dim, self.app_embed_dim, self.sh_degree
-        #     ).to(DEVICE)
-        #     # initialize the last layer to be zero so that the initial output is zero.
-        #     torch.nn.init.zeros_(self.app_module.color_head[-1].weight)
-        #     torch.nn.init.zeros_(self.app_module.color_head[-1].bias)
-        #     self.app_optimizers = [
-        #         torch.optim.Adam(
-        #             self.app_module.embeds.parameters(),
-        #             lr=self.app_opt_lr * math.sqrt(self.batch_size) * 10.0,
-        #             weight_decay=self.app_opt_reg,
-        #         ),
-        #         torch.optim.Adam(
-        #             self.app_module.color_head.parameters(),
-        #             lr=self.app_opt_lr * math.sqrt(self.batch_size),
-        #         ),
-        #     ]
+        if self.app_opt:
+            self.app_module = AppearanceOptModule(
+                len(self.trainset), feature_dim, self.app_embed_dim, self.sh_degree
+            ).to(DEVICE)
+            # initialize the last layer to be zero so that the initial output is zero.
+            torch.nn.init.zeros_(self.app_module.color_head[-1].weight)
+            torch.nn.init.zeros_(self.app_module.color_head[-1].bias)
+            self.app_optimizers = [
+                torch.optim.Adam(
+                    self.app_module.embeds.parameters(),
+                    lr=self.app_opt_lr * math.sqrt(self.batch_size) * 10.0,
+                    weight_decay=self.app_opt_reg,
+                ),
+                torch.optim.Adam(
+                    self.app_module.color_head.parameters(),
+                    lr=self.app_opt_lr * math.sqrt(self.batch_size),
+                ),
+            ]
 
         # Losses & Metrics.
         self.init_loss()
@@ -252,17 +195,17 @@ class Runner(Config):
         opacities = torch.sigmoid(self.splats["opacities"])  # [N,]
 
         image_ids = kwargs.pop("image_ids", None)
-        # if self.app_opt:
-        #     colors = self.app_module(
-        #         features=self.splats["features"],
-        #         embed_ids=image_ids,
-        #         dirs=means[None, :, :] - camtoworlds[:, None, :3, 3],
-        #         sh_degree=kwargs.pop("sh_degree", self.self.sh_degree),
-        #     )
-        #     colors = colors + self.splats["colors"]
-        #     colors = torch.sigmoid(colors)
-        # else:
-        colors = torch.cat([self.splats["sh0"], self.splats["shN"]], 1)  # [N, K, 3]
+        if self.app_opt:
+            colors = self.app_module(
+                features=self.splats["features"],
+                embed_ids=image_ids,
+                dirs=means[None, :, :] - camtoworlds[:, None, :3, 3],
+                sh_degree=kwargs.pop("sh_degree", self.sh_degree),
+            )
+            colors = colors + self.splats["colors"]
+            colors = torch.sigmoid(colors)
+        else:
+            colors = torch.cat([self.splats["sh0"], self.splats["shN"]], 1)  # [N, K, 3]
 
         rasterize_mode = "antialiased" if self.antialiased else "classic"
         render_colors, render_alphas, info = rasterization(
@@ -299,13 +242,13 @@ class Runner(Config):
                 self.optimizers[0], gamma=0.01 ** (1.0 / max_steps)
             ),
         ]
-        # if self.pose_opt:
-        #     # pose optimization has a learning rate schedule
-        #     scheulers.append(
-        #         torch.optim.lr_scheduler.ExponentialLR(
-        #             self.pose_optimizers[0], gamma=0.01 ** (1.0 / max_steps)
-        #         )
-        #     )
+        if self.pose_opt:
+            # pose optimization has a learning rate schedule
+            scheulers.append(
+                torch.optim.lr_scheduler.ExponentialLR(
+                    self.pose_optimizers[0], gamma=0.01 ** (1.0 / max_steps)
+                )
+            )
 
         # NOTE: no batch size
         # trainloader = torch.utils.data.DataLoader(
@@ -320,7 +263,7 @@ class Runner(Config):
 
         # NOTE: Training loop.
         global_tic = default_timer()
-        for i, data in enumerate(self.trainset[:2]):
+        for i, data in enumerate(self.trainset):
             data: RGBDImage
             pbar = tqdm.tqdm(range(init_step, max_steps))
             for step in pbar:
@@ -338,7 +281,8 @@ class Runner(Config):
                 #     data = next(trainloader_iter)
 
                 # data: RGBDImage
-                camtoworlds = camtoworlds_gt = data.pose.unsqueeze(0)  # [1, 4, 4]
+                c2w = data.pose.unsqueeze(0)  # [1, 4, 4]
+                c2w_gt = self.c2w_gts[i].unsqueeze(0)
                 # camtoworlds = camtoworlds_gt = data["camtoworld"].to(device)  # [1, 4, 4]
                 Ks = data.K.unsqueeze(0)  # [1, 3, 3]
                 # Ks = data["K"].to(device)  # [1, 3, 3]
@@ -348,7 +292,7 @@ class Runner(Config):
                 num_train_rays_per_step = (
                     pixels.shape[0] * pixels.shape[1] * pixels.shape[2]
                 )
-                image_ids = to_tensor(i, device=DEVICE, dtype=torch.int32)
+                image_ids = to_tensor([i], device=DEVICE, dtype=torch.int32)
                 # image_ids = data["image_id"].to(device)
                 # if self.depth_loss:
                 #     points = data.points.unsqueeze(0)  # [1, M, 2]
@@ -358,17 +302,17 @@ class Runner(Config):
                 height, width = pixels.shape[1:3]
 
                 # if self.pose_noise:
-                #     camtoworlds = self.pose_perturb(camtoworlds, image_ids)
+                #     c2w = self.pose_perturb(c2w, image_ids)
 
-                # if self.pose_opt:
-                #     camtoworlds = self.pose_adjust(camtoworlds, image_ids)
+                if self.pose_opt:
+                    c2w = self.pose_adjust(c2w, image_ids)
 
                 # sh schedule
                 sh_degree_to_use = min(step // self.sh_degree_interval, self.sh_degree)
 
                 # forward
                 renders, alphas, info = self.rasterize_splats(
-                    camtoworlds=camtoworlds,
+                    camtoworlds=c2w,
                     Ks=Ks,
                     width=width,
                     height=height,
@@ -417,15 +361,15 @@ class Runner(Config):
                 #     disp_gt = 1.0 / depths_gt  # [1, M]
                 #     depthloss = F.l1_loss(disp, disp_gt) * self.scene_scale
                 #     loss += depthloss * self.depth_lambda
-                # BUG: backward failed
                 loss.backward()
 
                 desc = f"loss={loss.item():.8f}| " f"sh degree={sh_degree_to_use}| "
                 # if self.depth_loss:
                 #     desc += f"depth loss={depthloss.item():.6f}| "
-                if self.pose_opt and self.pose_noise:
+                # if self.pose_opt and self.pose_noise:
+                if self.pose_opt:
                     # monitor the pose error if we inject noise
-                    pose_err = F.l1_loss(camtoworlds_gt, camtoworlds)
+                    pose_err = F.l1_loss(c2w_gt, c2w)
                     desc += f"pose err={pose_err.item():.6f}| "
                 pbar.set_description(desc)
 
@@ -559,8 +503,8 @@ class Runner(Config):
                     )
 
                 # eval the full set
-                # if step in [i - 1 for i in self.eval_steps] or step == max_steps - 1:
-                #     self.eval(step)
+                if step in [i - 1 for i in self.eval_steps] or step == max_steps - 1:
+                    self.eval(step)
                 # self.render_traj(step)
 
                 if not self.disable_viewer:
@@ -589,7 +533,7 @@ class Runner(Config):
             # grads is [nnz, 2]
             gs_ids = info["gaussian_ids"]  # [nnz] or None
             self.running_stats["grad2d"].index_add_(0, gs_ids, grads.norm(dim=-1))
-            self.running_stats["count"].index_add_(0, gs_ids, torch.ones_like(gs_ids))
+            self.running_stats["count"].index_add_(0, gs_ids, torch.ones_like(gs_ids).int())
         else:
             # grads is [C, N, 2]
             sel = info["radii"] > 0.0  # [C, N]
@@ -734,7 +678,7 @@ class Runner(Config):
         ellipse_time = 0
         metrics = {"psnr": [], "ssim": [], "lpips": []}
         for i, data in enumerate(self.trainset):
-            camtoworlds = data.pose.unsqueeze(0)
+            c2w = data.pose.unsqueeze(0)
             # camtoworlds = data["camtoworld"].to(device)
             Ks = data.K.unsqueeze(0)
             # Ks = data["K"].to(device)
@@ -745,7 +689,7 @@ class Runner(Config):
             torch.cuda.synchronize()
             tic = time.time()
             colors, _, _ = self.rasterize_splats(
-                camtoworlds=camtoworlds,
+                camtoworlds=c2w,
                 Ks=Ks,
                 width=width,
                 height=height,
@@ -863,7 +807,7 @@ class Runner(Config):
             width=W,
             height=H,
             sh_degree=self.sh_degree,  # active all SH degrees
-            radius_clip=3.0,  # skip GSs that have small image radius (in pixels)
+            # radius_clip=3.0,  # skip GSs that have small image radius (in pixels)
         )  # [1, H, W, 3]
         return render_colors[0].cpu().numpy()
 

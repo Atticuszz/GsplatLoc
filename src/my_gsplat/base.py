@@ -55,11 +55,17 @@ class DatasetConfig:
         #     patch_size=self.patch_size,
         #     load_depths=depth_loss,
 
-        end = 2
-        self.trainset = normalize_dataset_slice(Replica()[:end])
-
+        start = 1000
+        step = 20
+        self.trainset = normalize_dataset_slice(Replica()[start:start+step:8])
+        print(len(self.trainset))
         # self.valset = Dataset(self.parser, split="val")
         self.scene_scale = scene_scale(self.trainset).item() * 1.1 * self.global_scale
+
+        self.c2w_gts = []
+        for rgb_d in self.trainset:
+            self.c2w_gts.append(rgb_d.pose)
+            # rgb_d.pose = self.trainset[0].pose
 
         print("Scene scale:", self.scene_scale)
 
@@ -128,7 +134,7 @@ class RasterizeConfig:
 
 @dataclass
 class CameraConfig:
-    pose_opt: bool = True
+    pose_opt: bool = False
     pose_opt_lr: float = 1e-5
     pose_opt_reg: float = 1e-6
     pose_noise: float = 0.0
