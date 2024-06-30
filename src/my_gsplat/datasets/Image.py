@@ -43,6 +43,10 @@ class RGBDImage:
         self._pcd = self._project_pcds(include_homogeneous=False)
 
     @property
+    def size(self):
+        return self._pcd.size(0)
+
+    @property
     def color(self) -> Tensor:
         """
         Returns

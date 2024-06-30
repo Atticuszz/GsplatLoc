@@ -1,6 +1,6 @@
 import torch
 
-from ..structure import RGBDImage
+from .Image import RGBDImage
 
 
 @torch.no_grad()
@@ -206,14 +206,47 @@ def normalize_dataset_slice(dataset_slice: list[RGBDImage]) -> list[RGBDImage]:
     for i, rgb_d in enumerate(dataset_slice):
         num_points = len(rgb_d.points)
         rgb_d.pose = poses[i]
-        rgb_d.points = points[start_idx: start_idx + num_points]
+        rgb_d.points = points[start_idx : start_idx + num_points]
         start_idx += num_points
 
     return dataset_slice
 
 
 @torch.no_grad()
-def scene_scale(dataset_slice: list[RGBDImage]) -> torch.Tensor:
+def normalize_2(tar: RGBDImage, src: RGBDImage) -> tuple[RGBDImage, RGBDImage]:
+    """normalize two rgb image with tar pose"""
+
+    # combine as one scene
+    poses = torch.stack([tar.pose, src.pose], dim=0)
+    # NOTE: transform to world,init with first pose
+    points = torch.cat(
+        [
+            transform_points(tar.pose, tar.points),
+            transform_points(tar.pose, src.points),
+        ],
+        dim=0,
+    )
+    # normalize
+    T1 = similarity_from_cameras(poses)
+    poses = transform_cameras(T1, poses)
+    points = transform_points(T1, points)
+
+    T2 = align_principle_axes(points)
+    poses = transform_cameras(T2, poses)
+    points = transform_points(T2, points)
+
+    # transform = T2 @ T1
+
+    # Update the original data with normalized values
+    num_points = len(tar.points)
+    tar.points, src.points = points[:num_points], points[num_points:]
+    tar.pose, src.pose = poses[0], poses[1]
+
+    return tar, src
+
+
+@torch.no_grad()
+def scene_scale(dataset_slice: list[RGBDImage], global_scale: float = 1.0) -> float:
     poses = torch.stack([rgb_d.pose for rgb_d in dataset_slice], dim=0)
 
     camera_locations = poses[:, :3, 3]
@@ -223,4 +256,4 @@ def scene_scale(dataset_slice: list[RGBDImage]) -> torch.Tensor:
     dists = torch.norm(camera_locations - scene_center, dim=1)
     scale = torch.max(dists)
 
-    return scale
+    return scale.item() * 1.1 * global_scale

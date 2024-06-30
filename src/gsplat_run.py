@@ -2,12 +2,13 @@ import time
 
 import torch
 
-from my_gsplat.trainer import Runner
+from my_gsplat.gs_trainer import Runner
 from pose_estimation import DEVICE
+
+# from my_gsplat.trainer import Runner
 
 
 def main():
-    # BUG: failed to show results
     runner = Runner()
     runner.adjust_steps()
     if runner.ckpt is not None:

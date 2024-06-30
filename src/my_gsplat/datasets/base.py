@@ -4,6 +4,7 @@ from pathlib import Path
 
 from nerfview import Viewer
 from numpy.typing import NDArray
+from torch import Tensor
 from torchmetrics.image import (
     LearnedPerceptualImagePatchSimilarity,
     PeakSignalNoiseRatio,
@@ -11,9 +12,8 @@ from torchmetrics.image import (
 )
 from viser import ViserServer
 
-from .datasets.normalize import normalize_dataset_slice, scene_scale
-from .structure import Replica, RGBDImage
-from .utils import DEVICE
+from ..utils import DEVICE
+from .Image import RGBDImage
 
 
 @dataclass
@@ -41,34 +41,6 @@ class DatasetConfig:
     pcd: NDArray | None = None  # N,3
     color: NDArray | None = None  # N,3
 
-    def load_data(self, depth_loss, normalize: bool = True):
-        # Load data: Training data should contain initial points and colors.
-        # self.parser = Parser(
-        #     data_dir=self.data_dir,
-        #     factor=self.data_factor,
-        #     normalize=True,
-        #     test_every=self.test_every,
-        # )
-        # self.trainset = Dataset(
-        #     self.parser,
-        #     split="train",
-        #     patch_size=self.patch_size,
-        #     load_depths=depth_loss,
-
-        start = 1000
-        step = 20
-        self.trainset = normalize_dataset_slice(Replica()[start:start+step:8])
-        print(len(self.trainset))
-        # self.valset = Dataset(self.parser, split="val")
-        self.scene_scale = scene_scale(self.trainset).item() * 1.1 * self.global_scale
-
-        self.c2w_gts = []
-        for rgb_d in self.trainset:
-            self.c2w_gts.append(rgb_d.pose)
-            # rgb_d.pose = self.trainset[0].pose
-
-        print("Scene scale:", self.scene_scale)
-
     def make_dir(self):
         # Where to dump results.
         self.res_dir = Path(self.result_dir)
@@ -86,9 +58,9 @@ class DatasetConfig:
 @dataclass
 class TrainingConfig:
     batch_size: int = 1
-    max_steps: int = 200
-    eval_steps: list[int] = field(default_factory=lambda: [7_000, 30_000])
-    save_steps: list[int] = field(default_factory=lambda: [7_000, 30_000])
+    max_steps: int = 1000
+    eval_steps: list[int] = field(default_factory=lambda: [200, 30_000])
+    save_steps: list[int] = field(default_factory=lambda: [1000, 30_000])
     steps_scaler: float = 1.0
     refine_start_iter: int = 500
     refine_stop_iter: int = 15_000
@@ -134,9 +106,9 @@ class RasterizeConfig:
 
 @dataclass
 class CameraConfig:
-    pose_opt: bool = False
-    pose_opt_lr: float = 1e-5
-    pose_opt_reg: float = 1e-6
+    pose_opt: bool = True
+    pose_opt_lr: float = 1e-6
+    pose_opt_reg: float = 1e-3
     pose_noise: float = 0.0
 
 
@@ -202,3 +174,17 @@ class Config(
         self.refine_stop_iter = int(self.refine_stop_iter * factor)
         self.reset_every = int(self.reset_every * factor)
         self.refine_every = int(self.refine_every * factor)
+
+
+@dataclass
+class AlignData:
+    """normed data"""
+
+    # for GS
+    scene_scale: float
+    colors: Tensor  # N,3
+    pixels: Tensor  # H,W,3
+    points: Tensor  # N,3
+    tar_c2w: Tensor  # 4,4
+    src_c2w: Tensor  # 4,4
+    tar_nums: int  # for slice tar and src

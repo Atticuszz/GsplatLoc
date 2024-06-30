@@ -1,8 +1,6 @@
-import argparse
 import math
 import os
 import time
-from typing import Tuple
 
 import imageio
 import nerfview
@@ -13,13 +11,16 @@ import viser
 from gsplat._helper import load_test_data
 from gsplat.rendering import rasterization
 
+
 class GSViewer:
-    def __init__(self,
-                 output_dir: str = "results/",
-                 scene_grid: int = 1,
-                 ckpt: str = None,
-                 port: int = 8080,
-                 backend: str = "gsplat"):
+    def __init__(
+        self,
+        output_dir: str = "results/",
+        scene_grid: int = 1,
+        ckpt: str = None,
+        port: int = 8080,
+        backend: str = "gsplat",
+    ):
         self.output_dir = output_dir
         self.scene_grid = scene_grid
         self.ckpt = ckpt
@@ -82,14 +83,17 @@ class GSViewer:
                 ],
                 indexing="ij",
             )
-            grid = torch.stack([gridx, gridy, torch.zeros_like(gridx)], dim=-1).reshape(-1, 3)
-            self.means = self.means[None, :, :] + grid[:, None, :] * edges[None, None, :]
+            grid = torch.stack([gridx, gridy, torch.zeros_like(gridx)], dim=-1).reshape(
+                -1, 3
+            )
+            self.means = (
+                self.means[None, :, :] + grid[:, None, :] * edges[None, None, :]
+            )
             self.means = self.means.reshape(-1, 3)
             self.quats = self.quats.repeat(repeats**2, 1)
             self.scales = self.scales.repeat(repeats**2, 1)
             self.colors = self.colors.repeat(repeats**2, 1, 1)
             self.opacities = self.opacities.repeat(repeats**2)
-
 
     def render_batch(self):
         if self.ckpt is None:
@@ -118,21 +122,29 @@ class GSViewer:
                 torch.cat(
                     [
                         render_rgbs.reshape(self.C * self.height, self.width, 3),
-                        render_depths.reshape(self.C * self.height, self.width, 1).expand(-1, -1, 3),
-                        render_alphas.reshape(self.C * self.height, self.width, 1).expand(-1, -1, 3),
+                        render_depths.reshape(
+                            self.C * self.height, self.width, 1
+                        ).expand(-1, -1, 3),
+                        render_alphas.reshape(
+                            self.C * self.height, self.width, 1
+                        ).expand(-1, -1, 3),
                     ],
                     dim=1,
                 )
                 .cpu()
                 .numpy()
             )
-            imageio.imsave(f"{self.output_dir}/render.png", (canvas * 255).astype(np.uint8))
+            imageio.imsave(
+                f"{self.output_dir}/render.png", (canvas * 255).astype(np.uint8)
+            )
             print(canvas)
         else:
             print("Batch rendering is not supported for custom checkpoints.")
 
     @torch.no_grad()
-    def viewer_render_fn(self, camera_state: nerfview.CameraState, img_wh: tuple[int, int]):
+    def viewer_render_fn(
+        self, camera_state: nerfview.CameraState, img_wh: tuple[int, int]
+    ):
         width, height = img_wh
         c2w = camera_state.c2w
         K = camera_state.get_K(img_wh)
@@ -144,9 +156,11 @@ class GSViewer:
             rasterization_fn = rasterization
         elif self.backend == "gsplat_legacy":
             from gsplat import rasterization_legacy_wrapper
+
             rasterization_fn = rasterization_legacy_wrapper
         elif self.backend == "inria":
             from gsplat import rasterization_inria_wrapper
+
             rasterization_fn = rasterization_inria_wrapper
         else:
             raise ValueError("Invalid backend")
@@ -187,9 +201,9 @@ if __name__ == "__main__":
     viewer = GSViewer(
         output_dir="results/",
         scene_grid=1,
-        ckpt='/home/atticuszz/DevSpace/python/AB_GICP/src/results/Replica/ckpts/ckpt_199.pt',  # Set to None for test data, or specify your checkpoint file
+        ckpt="/home/atticuszz/DevSpace/python/AB_GICP/src/results/Replica/ckpts/ckpt_199.pt",  # Set to None for test data, or specify your checkpoint file
         port=8080,
-        backend="gsplat"
+        backend="gsplat",
     )
     viewer.render_batch()
     viewer.run_viewer()

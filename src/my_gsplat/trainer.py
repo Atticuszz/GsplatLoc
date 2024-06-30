@@ -3,7 +3,6 @@ import math
 import os
 import time
 from timeit import default_timer
-from typing import Dict, Optional, Tuple
 
 import imageio
 import nerfview
@@ -12,17 +11,18 @@ import torch
 import torch.nn.functional as F
 import tqdm
 from gsplat.rendering import rasterization
-
-# from datasets.colmap import Dataset, Parser
-from .datasets.traj import generate_interpolated_path
 from torch import Tensor
 from torch.nn import ParameterDict
 from torch.optim import Adam, SparseAdam
 from torch.utils.tensorboard import SummaryWriter
 
-from .base import Config
-from .model import AppearanceOptModule, CameraOptModule
-from .structure import RGBDImage
+from src.my_gsplat.datasets.base import AlignData, Config
+from src.my_gsplat.datasets.dataset import Parser
+
+
+# from datasets.colmap import Dataset, Parser
+from .datasets.traj import generate_interpolated_path
+from .model import CameraOptModule
 from .utils import (
     DEVICE,
     CustomEncoder,
@@ -32,6 +32,8 @@ from .utils import (
     set_random_seed,
     to_tensor,
 )
+
+
 def create_splats_with_optimizers(
     points: Tensor,  # [N, 3]
     rgbs: Tensor,  # [N, 3]
@@ -49,7 +51,12 @@ def create_splats_with_optimizers(
     dist2_avg = (knn(points, 4)[:, 1:] ** 2).mean(dim=-1)  # [N,]
     dist_avg = torch.sqrt(dist2_avg)
     scales = torch.log(dist_avg).unsqueeze(-1).repeat(1, 3)  # [N, 3]
-    quats = torch.rand((N, 4))  # [N, 4]
+
+    # NOTE: no deformation
+    quats = to_tensor([1, 0, 0, 0], device=device, requires_grad=True).repeat(
+        N, 1
+    )  # [N, 4]
+    # quats = torch.rand((N, 4))  # [N, 4]
     opacities = torch.logit(torch.full((N,), init_opacity))  # [N,]
 
     params = [
@@ -102,24 +109,18 @@ class Runner(Config):
         self.writer = SummaryWriter(log_dir=f"{self.result_dir}/tb")
 
         # load data
-        self.load_data(self.depth_loss)
+        self.parser = Parser()
 
         # Model
         feature_dim = 32 if self.app_opt else None
-        points_tensor = torch.cat(
-            [rgb_d.points for rgb_d in self.trainset], dim=0
-        )  # N,3
-        color_tensor = torch.stack(
-            [rgb_d.color / 255.0 for rgb_d in self.trainset], dim=0
-        ).reshape(
-            -1, 3
-        )  # N,3
+        points_tensor = self.parser[0].points
+        color_tensor = self.parser[0].colors
         self.splats, self.optimizers = create_splats_with_optimizers(
             points_tensor,
             # torch.from_numpy(self.parser.points).float(),
             color_tensor,
             # torch.from_numpy(self.parser.points_rgb / 255.0).float(),
-            scene_scale=self.scene_scale,
+            scene_scale=self.parser[0].scene_scale,
             sh_degree=self.sh_degree,
             init_opacity=self.init_opa,
             sparse_grad=self.sparse_grad,
@@ -132,7 +133,7 @@ class Runner(Config):
         # Pose
         self.pose_optimizers = []
         if self.pose_opt:
-            self.pose_adjust = CameraOptModule(len(self.trainset)).to(DEVICE)
+            self.pose_adjust = CameraOptModule(len(self.parser)).to(DEVICE)
             self.pose_adjust.zero_init()
             self.pose_optimizers = [
                 torch.optim.Adam(
@@ -147,24 +148,24 @@ class Runner(Config):
         #     self.pose_perturb.random_init(self.pose_noise)
 
         self.app_optimizers = []
-        if self.app_opt:
-            self.app_module = AppearanceOptModule(
-                len(self.trainset), feature_dim, self.app_embed_dim, self.sh_degree
-            ).to(DEVICE)
-            # initialize the last layer to be zero so that the initial output is zero.
-            torch.nn.init.zeros_(self.app_module.color_head[-1].weight)
-            torch.nn.init.zeros_(self.app_module.color_head[-1].bias)
-            self.app_optimizers = [
-                torch.optim.Adam(
-                    self.app_module.embeds.parameters(),
-                    lr=self.app_opt_lr * math.sqrt(self.batch_size) * 10.0,
-                    weight_decay=self.app_opt_reg,
-                ),
-                torch.optim.Adam(
-                    self.app_module.color_head.parameters(),
-                    lr=self.app_opt_lr * math.sqrt(self.batch_size),
-                ),
-            ]
+        # if self.app_opt:
+        #     self.app_module = AppearanceOptModule(
+        #         len(self.trainset), feature_dim, self.app_embed_dim, self.sh_degree
+        #     ).to(DEVICE)
+        #     # initialize the last layer to be zero so that the initial output is zero.
+        #     torch.nn.init.zeros_(self.app_module.color_head[-1].weight)
+        #     torch.nn.init.zeros_(self.app_module.color_head[-1].bias)
+        #     self.app_optimizers = [
+        #         torch.optim.Adam(
+        #             self.app_module.embeds.parameters(),
+        #             lr=self.app_opt_lr * math.sqrt(self.batch_size) * 10.0,
+        #             weight_decay=self.app_opt_reg,
+        #         ),
+        #         torch.optim.Adam(
+        #             self.app_module.color_head.parameters(),
+        #             lr=self.app_opt_lr * math.sqrt(self.batch_size),
+        #         ),
+        #     ]
 
         # Losses & Metrics.
         self.init_loss()
@@ -191,23 +192,25 @@ class Runner(Config):
         # quats = F.normalize(self.splats["quats"], dim=-1)  # [N, 4]
         # rasterization does normalization internally
         quats = self.splats["quats"]  # [N, 4]
+        # quats = self.splats["quats"]  # [N, 4]
         scales = torch.exp(self.splats["scales"])  # [N, 3]
         opacities = torch.sigmoid(self.splats["opacities"])  # [N,]
 
         image_ids = kwargs.pop("image_ids", None)
-        if self.app_opt:
-            colors = self.app_module(
-                features=self.splats["features"],
-                embed_ids=image_ids,
-                dirs=means[None, :, :] - camtoworlds[:, None, :3, 3],
-                sh_degree=kwargs.pop("sh_degree", self.sh_degree),
-            )
-            colors = colors + self.splats["colors"]
-            colors = torch.sigmoid(colors)
-        else:
-            colors = torch.cat([self.splats["sh0"], self.splats["shN"]], 1)  # [N, K, 3]
+        # if self.app_opt:
+        #     colors = self.app_module(
+        #         features=self.splats["features"],
+        #         embed_ids=image_ids,
+        #         dirs=means[None, :, :] - camtoworlds[:, None, :3, 3],
+        #         sh_degree=kwargs.pop("sh_degree", self.sh_degree),
+        #     )
+        #     colors = colors + self.splats["colors"]
+        #     colors = torch.sigmoid(colors)
+        # else:
+        colors = torch.cat([self.splats["sh0"], self.splats["shN"]], 1)  # [N, K, 3]
 
         rasterize_mode = "antialiased" if self.antialiased else "classic"
+
         render_colors, render_alphas, info = rasterization(
             means=means,
             quats=quats,
@@ -263,8 +266,8 @@ class Runner(Config):
 
         # NOTE: Training loop.
         global_tic = default_timer()
-        for i, data in enumerate(self.trainset):
-            data: RGBDImage
+        for i, data in enumerate(self.parser):
+            data: AlignData
             pbar = tqdm.tqdm(range(init_step, max_steps))
             for step in pbar:
                 if not self.disable_viewer:
@@ -279,14 +282,13 @@ class Runner(Config):
                 # except StopIteration:
                 #     trainloader_iter = iter(trainloader)
                 #     data = next(trainloader_iter)
-
                 # data: RGBDImage
-                c2w = data.pose.unsqueeze(0)  # [1, 4, 4]
-                c2w_gt = self.c2w_gts[i].unsqueeze(0)
+                c2w = data.tar_c2w.unsqueeze(0)  # [1, 4, 4]
+                c2w_gt = data.src_c2w.unsqueeze(0)
                 # camtoworlds = camtoworlds_gt = data["camtoworld"].to(device)  # [1, 4, 4]
-                Ks = data.K.unsqueeze(0)  # [1, 3, 3]
+                Ks = self.parser.K.unsqueeze(0)  # [1, 3, 3]
                 # Ks = data["K"].to(device)  # [1, 3, 3]
-                pixels = data.color.unsqueeze(0) / 255.0  # [1, H, W, 3]
+                pixels = data.pixels.unsqueeze(0) / 255.0  # [1, H, W, 3]
                 # pixels = data["image"].to(device) / 255.0  # [1, H, W, 3]
 
                 num_train_rays_per_step = (
@@ -294,10 +296,10 @@ class Runner(Config):
                 )
                 image_ids = to_tensor([i], device=DEVICE, dtype=torch.int32)
                 # image_ids = data["image_id"].to(device)
-                # if self.depth_loss:
-                #     points = data.points.unsqueeze(0)  # [1, M, 2]
-                #     # NOTE: depth need to follow the normalized
-                #     depths_gt = data.depth.unsqueeze(0)  # [1, M]
+                if self.depth_loss:
+                    points = data.points.unsqueeze(0)  # [1, M, 2]
+                    # NOTE: depth need to follow the normalized
+                    depths_gt = data.depth.unsqueeze(0)  # [1, M]
 
                 height, width = pixels.shape[1:3]
 
@@ -340,32 +342,32 @@ class Runner(Config):
                 )
                 loss = l1loss * (1.0 - self.ssim_lambda) + ssimloss * self.ssim_lambda
 
-                # if self.depth_loss:
-                #     # query depths from depth map
-                #     points = torch.stack(
-                #         [
-                #             points[:, :, 0] / (width - 1) * 2 - 1,
-                #             points[:, :, 1] / (height - 1) * 2 - 1,
-                #         ],
-                #         dim=-1,
-                #     )  # normalize to [-1, 1]
-                #     grid = points.unsqueeze(2)  # [1, M, 1, 2]
-                #     depths = F.grid_sample(
-                #         depths.permute(0, 3, 1, 2), grid, align_corners=True
-                #     )  # [1, 1, M, 1]
-                #     depths = depths.squeeze(3).squeeze(1)  # [1, M]
-                #     # calculate loss in disparity space
-                #     disp = torch.where(
-                #         depths > 0.0, 1.0 / depths, torch.zeros_like(depths)
-                #     )
-                #     disp_gt = 1.0 / depths_gt  # [1, M]
-                #     depthloss = F.l1_loss(disp, disp_gt) * self.scene_scale
-                #     loss += depthloss * self.depth_lambda
+                if self.depth_loss:
+                    # query depths from depth map
+                    points = torch.stack(
+                        [
+                            points[:, :, 0] / (width - 1) * 2 - 1,
+                            points[:, :, 1] / (height - 1) * 2 - 1,
+                        ],
+                        dim=-1,
+                    )  # normalize to [-1, 1]
+                    grid = points.unsqueeze(2)  # [1, M, 1, 2]
+                    depths = F.grid_sample(
+                        depths.permute(0, 3, 1, 2), grid, align_corners=True
+                    )  # [1, 1, M, 1]
+                    depths = depths.squeeze(3).squeeze(1)  # [1, M]
+                    # calculate loss in disparity space
+                    disp = torch.where(
+                        depths > 0.0, 1.0 / depths, torch.zeros_like(depths)
+                    )
+                    disp_gt = 1.0 / depths_gt  # [1, M]
+                    depthloss = F.l1_loss(disp, disp_gt) * self.scene_scale
+                    loss += depthloss * self.depth_lambda
                 loss.backward()
 
                 desc = f"loss={loss.item():.8f}| " f"sh degree={sh_degree_to_use}| "
-                # if self.depth_loss:
-                #     desc += f"depth loss={depthloss.item():.6f}| "
+                if self.depth_loss:
+                    desc += f"depth loss={depthloss.item():.6f}| "
                 # if self.pose_opt and self.pose_noise:
                 if self.pose_opt:
                     # monitor the pose error if we inject noise
@@ -382,10 +384,10 @@ class Runner(Config):
                         "train/num_GS", len(self.splats["means3d"]), step
                     )
                     self.writer.add_scalar("train/mem", mem, step)
-                    # if self.depth_loss:
-                    #     self.writer.add_scalar(
-                    #         "train/depthloss", depthloss.item(), step
-                    #     )
+                    if self.depth_loss:
+                        self.writer.add_scalar(
+                            "train/depthloss", depthloss.item(), step
+                        )
                     if self.tb_save_image:
                         canvas = (
                             torch.cat([pixels, colors], dim=2).detach().cpu().numpy()
@@ -407,7 +409,7 @@ class Runner(Config):
                         is_grad_high = grads >= self.grow_grad2d
                         is_small = (
                             torch.exp(self.splats["scales"]).max(dim=-1).values
-                            <= self.grow_scale3d * self.scene_scale
+                            <= self.grow_scale3d * self.parser[0].scene_scale
                         )
                         is_dupli = is_grad_high & is_small
                         n_dupli = is_dupli.sum().item()
@@ -533,7 +535,9 @@ class Runner(Config):
             # grads is [nnz, 2]
             gs_ids = info["gaussian_ids"]  # [nnz] or None
             self.running_stats["grad2d"].index_add_(0, gs_ids, grads.norm(dim=-1))
-            self.running_stats["count"].index_add_(0, gs_ids, torch.ones_like(gs_ids).int())
+            self.running_stats["count"].index_add_(
+                0, gs_ids, torch.ones_like(gs_ids).int()
+            )
         else:
             # grads is [C, N, 2]
             sel = info["radii"] > 0.0  # [C, N]
@@ -575,6 +579,7 @@ class Runner(Config):
 
         scales = torch.exp(self.splats["scales"][sel])  # [N, 3]
         quats = F.normalize(self.splats["quats"][sel], dim=-1)  # [N, 4]
+        # quats = F.normalize(self.splats["quats"][sel], dim=-1)  # [N, 4]
         rotmats = normalized_quat_to_rotmat(quats)  # [N, 3, 3]
         samples = torch.einsum(
             "nij,nj,bnj->bni",

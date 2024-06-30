@@ -2,10 +2,13 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import torch
 from natsort import natsorted
 
-from ..utils import as_intrinsics_matrix, load_camera_cfg
+from ..utils import as_intrinsics_matrix, load_camera_cfg, to_tensor
+from .base import AlignData
 from .Image import RGBDImage
+from .normalize import normalize_2, scene_scale
 
 
 class DataLoaderBase:
@@ -136,3 +139,36 @@ class Replica(DataLoaderBase):
                 f"Number of color and depth images do not match in {self.input_folder}."
             )
         return color_paths, depth_paths
+
+
+class Parser(Replica):
+
+    def __init__(self):
+        super().__init__()
+        self.K = to_tensor(self.K)
+
+    def __len__(self) -> int:
+        return super().__len__() - 1
+
+    def __getitem__(self, index: int) -> AlignData:
+        assert index < len(self)
+        tar, src = super().__getitem__(index), super().__getitem__(index + 5)
+        tar_normed, src_normed = normalize_2(tar, src)
+        scene_scale_normed = scene_scale([tar_normed, src_normed])
+
+        # test
+        points = torch.cat([tar_normed.points, src_normed.points], dim=0)  # N,3
+        rgbs = torch.stack(
+            [tar_normed.color / 255.0, src_normed.color / 255.0], dim=0
+        ).reshape(
+            -1, 3
+        )  # N,3
+        return AlignData(
+            scene_scale_normed,
+            rgbs,
+            src_normed.color,
+            points,
+            tar_c2w=tar_normed.pose,
+            src_c2w=src_normed.pose,
+            tar_nums=tar_normed.points.shape[0],
+        )

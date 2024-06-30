@@ -141,7 +141,7 @@ def load_camera_cfg(cfg_path: str) -> dict:
     return cfg
 
 
-def to_tensor(data, device, requires_grad=False, dtype=torch.float32):
+def to_tensor(data, device=DEVICE, requires_grad=False, dtype=torch.float32):
     """
     Convert numpy array or list to a PyTorch tensor.
     """
@@ -163,3 +163,15 @@ class CustomEncoder(JSONEncoder):
             return super().default(obj)
         except TypeError:
             return str(obj)
+
+
+def print_parameters(**kwargs):
+    for key, value in kwargs.items():
+        print(f"{key}:")
+        if isinstance(value, torch.Tensor):
+            print(f"  Shape: {value.shape}")
+            print(f"  Dtype: {value.dtype}")
+            print(f"  Device: {value.device}")
+            print(f"  Memory: {value.element_size() * value.nelement()} bytes")
+        else:
+            print(f"  Value: {value}")
