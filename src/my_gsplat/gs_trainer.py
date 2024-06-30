@@ -34,25 +34,6 @@ class Runner(Config):
         # load data
         self.parser = Parser()
 
-        # Pose
-        self.pose_optimizers = []
-        if self.pose_opt:
-            self.pose_adjust = CameraOptModule(len(self.parser)).to(DEVICE)
-            self.pose_adjust.zero_init()
-            self.pose_optimizers = [
-                torch.optim.Adam(
-                    self.pose_adjust.parameters(),
-                    lr=self.pose_opt_lr * math.sqrt(self.batch_size),
-                    weight_decay=self.pose_opt_reg,
-                )
-            ]
-
-        # if self.pose_noise > 0.0:
-        #     self.pose_perturb = CameraOptModule(len(self.trainset)).to(DEVICE)
-        #     self.pose_perturb.random_init(self.pose_noise)
-
-        self.app_optimizers = []
-
         # Losses & Metrics.
         self.init_loss()
 
@@ -70,20 +51,17 @@ class Runner(Config):
             # models, optimizers and schedulers
             gs_splats = GSModel(train_data)
             print("Model initialized. Number of GS:", len(gs_splats))
+            camera_opt = CameraOptModule(train_data.tar_c2w)
 
             schedulers = [
                 # means3d has a learning rate schedule, that end at 0.01 of the initial value
                 torch.optim.lr_scheduler.ExponentialLR(
                     gs_splats.optimizers[0], gamma=0.01 ** (1.0 / max_steps)
                 ),
+                torch.optim.lr_scheduler.ExponentialLR(
+                    camera_opt.optimizers[0], gamma=0.01 ** (1.0 / max_steps)
+                ),
             ]
-            if self.pose_opt:
-                # pose optimization has a learning rate schedule
-                schedulers.append(
-                    torch.optim.lr_scheduler.ExponentialLR(
-                        self.pose_optimizers[0], gamma=0.01 ** (1.0 / max_steps)
-                    )
-                )
 
             # nerf viewer
             self.init_view(gs_splats.viewer_render_fn)
@@ -98,6 +76,8 @@ class Runner(Config):
                         time.sleep(0.01)
                     self.viewer.lock.acquire()
                     tic = default_timer()
+                # with torch.autograd.detect_anomaly():
+                # NOTE: start forward
                 c2w = train_data.tar_c2w.unsqueeze(0)  # [1, 4, 4]
                 c2w_gt = train_data.src_c2w.unsqueeze(0)
                 Ks = self.parser.K.unsqueeze(0)  # [1, 3, 3]
@@ -113,28 +93,16 @@ class Runner(Config):
                 # sh schedule
                 sh_degree_to_use = min(step // self.sh_degree_interval, self.sh_degree)
 
-                # if self.pose_noise:
-                #     c2w = self.pose_perturb(c2w, image_ids)
-
-                if self.pose_opt:
-                    c2w = self.pose_adjust(c2w, image_ids)
-
-                # apply c2w to src_gs
-                if step > 0:
-                    transform_matrix = c2w @ torch.linalg.inv(last_c2w)
-                    transformed_points = transform_points(
-                        transform_matrix.squeeze(0),
-                        train_data.points[train_data.tar_nums :],
-                    )
-                    train_data.points[train_data.tar_nums :, :].copy_(
-                        transformed_points
-                    )
-                last_c2w = c2w.clone()
-                gs_splats.means3d = train_data.points
+                # BUG: c2w update wrong
+                # NOTE: apply c2w to src_gs
+                transformed_points, cur_c2w = camera_opt(train_data.src_points)
+                gs_splats.means3d = torch.cat(
+                    [train_data.tar_points, transformed_points], dim=0
+                )
 
                 # NOTE: gs forward
                 renders, alphas, info = gs_splats(
-                    camtoworlds=c2w,
+                    camtoworlds=cur_c2w.unsqueeze(0),
                     Ks=Ks,
                     width=width,
                     height=height,
@@ -157,15 +125,14 @@ class Runner(Config):
                     pixels.permute(0, 3, 1, 2), colors.permute(0, 3, 1, 2)
                 )
                 loss = l1loss * (1.0 - self.ssim_lambda) + ssimloss * self.ssim_lambda
-
+                # BUG: backward failed
                 loss.backward()
 
                 desc = f"loss={loss.item():.8f}| " f"sh degree={sh_degree_to_use}| "
-                # if self.pose_opt and self.pose_noise:
-                if self.pose_opt:
-                    # monitor the pose error if we inject noise
-                    pose_err = F.l1_loss(c2w_gt, c2w)
-                    desc += f"pose err={pose_err.item():.6f}| "
+
+                # monitor the pose error if we inject noise
+                pose_err = F.l1_loss(c2w_gt, c2w)
+                desc += f"pose err={pose_err.item():.6f}| "
                 pbar.set_description(desc)
 
                 if self.tb_every > 0 and step % self.tb_every == 0:
@@ -261,10 +228,7 @@ class Runner(Config):
                 for optimizer in gs_splats.optimizers:
                     optimizer.step()
                     optimizer.zero_grad(set_to_none=True)
-                for optimizer in self.pose_optimizers:
-                    optimizer.step()
-                    optimizer.zero_grad(set_to_none=True)
-                for optimizer in self.app_optimizers:
+                for optimizer in camera_opt.optimizers:
                     optimizer.step()
                     optimizer.zero_grad(set_to_none=True)
                 for scheduler in schedulers:

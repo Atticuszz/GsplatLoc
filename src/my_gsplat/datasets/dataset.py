@@ -168,6 +168,8 @@ class Parser(Replica):
             rgbs,
             src_normed.color,
             points,
+            tar_normed.points,
+            src_normed.points,
             tar_c2w=tar_normed.pose,
             src_c2w=src_normed.pose,
             tar_nums=tar_normed.points.shape[0],

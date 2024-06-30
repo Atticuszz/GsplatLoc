@@ -12,6 +12,7 @@ from torchmetrics.image import (
 )
 from viser import ViserServer
 
+
 from ..utils import DEVICE
 from .Image import RGBDImage
 
@@ -70,7 +71,7 @@ class TrainingConfig:
 
 @dataclass
 class OptimizationConfig:
-    ssim_lambda: float = 0.2
+    ssim_lambda: float = 0.3
     init_opa: float = 0.1
     prune_opa: float = 0.005
     grow_grad2d: float = 0.0002
@@ -102,14 +103,6 @@ class RasterizeConfig:
     near_plane: float = 0.01
     # Far plane clipping distance
     far_plane: float = 1e10
-
-
-@dataclass
-class CameraConfig:
-    pose_opt: bool = True
-    pose_opt_lr: float = 1e-6
-    pose_opt_reg: float = 1e-3
-    pose_noise: float = 0.0
 
 
 @dataclass
@@ -156,7 +149,6 @@ class Config(
     TrainingConfig,
     DatasetConfig,
     OptimizationConfig,
-    CameraConfig,
     AppearanceConfig,
     DepthLossConfig,
     ViewerConfig,
@@ -185,6 +177,8 @@ class AlignData:
     colors: Tensor  # N,3
     pixels: Tensor  # H,W,3
     points: Tensor  # N,3
+    tar_points: Tensor
+    src_points: Tensor
     tar_c2w: Tensor  # 4,4
     src_c2w: Tensor  # 4,4
     tar_nums: int  # for slice tar and src

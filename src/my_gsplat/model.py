@@ -1,6 +1,7 @@
 import math
 from dataclasses import dataclass
 
+import kornia.geometry
 import nerfview
 import torch
 import torch.nn.functional as F
@@ -13,13 +14,18 @@ from torchmetrics.image import (
     StructuralSimilarityIndexMeasure,
 )
 
-from src.my_gsplat.datasets.base import AlignData
+from .datasets.base import AlignData
 
-from .geometry import rotation_6d_to_matrix
+from .geometry import (
+    rotation_6d_to_matrix,
+    quaternion_to_rotation_matrix,
+    construct_full_pose,
+)
 from .utils import DEVICE, knn, normalized_quat_to_rotmat, rgb_to_sh, to_tensor
+from .geometry import rotation_matrix_to_quaternion
 
 
-class CameraOptModule(torch.nn.Module):
+class _CameraOptModule(torch.nn.Module):
     """Camera pose optimization module."""
 
     def __init__(self, n: int):
@@ -122,6 +128,57 @@ class AppearanceOptModule(torch.nn.Module):
             h = torch.cat([features, sh_bases], dim=-1)
         colors = self.color_head(h)
         return colors
+
+
+@dataclass
+class CameraConfig:
+    pose_opt: bool = True
+    pose_opt_lr: float = 1e-3
+    pose_opt_reg: float = 1e-3
+    pose_noise: float = 0.0
+
+
+class CameraOptModule(nn.Module, CameraConfig):
+    def __init__(self, init_pose: Tensor):
+        super().__init__()
+        self.c2w_last = init_pose
+        self.quaternion_cur = nn.Parameter(
+            rotation_matrix_to_quaternion(init_pose[:3, :3])
+        )
+        self.translation_cur = nn.Parameter(init_pose[:3, 3])
+        self.optimizers = self._create_optimizers()
+
+    def forward(self, points: Tensor):
+        cur_rotation = quaternion_to_rotation_matrix(self.quaternion_cur)
+        cur_c2w = construct_full_pose(cur_rotation, self.translation_cur)
+        transform_matrix = cur_c2w @ torch.linalg.inv(self.c2w_last)
+        new_points = kornia.geometry.transform_points(
+            transform_matrix.unsqueeze(0), points
+        )
+        self.c2w_last = cur_c2w.detach()
+        return new_points, cur_c2w
+
+    def _create_optimizers(self) -> list[Optimizer]:
+        params = [
+            # name, value, lr
+            # ("means3d", self.means3d, self.lr_means3d),
+            ("quat", self.quaternion_cur, self.pose_opt_lr),
+            ("trans", self.translation_cur, self.pose_opt_lr),
+        ]
+        optimizers = [
+            Adam(
+                [
+                    {
+                        "params": param,
+                        "lr": lr,
+                        "name": name,
+                    }
+                ],
+                weight_decay=self.pose_opt_reg,
+            )
+            for name, param, lr in params
+        ]
+        return optimizers
 
 
 @dataclass

@@ -3,6 +3,36 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 
+from .utils import DEVICE
+
+
+def construct_full_pose(rotation: Tensor, translation: Tensor):
+    """
+    Constructs the full 4x4 transformation matrix from rotation and translation.
+    Ensures that gradients are tracked for rotation and translation.
+    """
+    pose = torch.eye(4, dtype=rotation.dtype, device=DEVICE)
+    pose[:3, :3] = rotation
+    pose[:3, 3] = translation
+    return pose
+
+
+def rotation_matrix_to_quaternion(rotation_matrix: Tensor) -> Tensor:
+    """
+    Convert a rotation matrix to a quaternion.
+
+    Parameters
+    ----------
+    rotation_matrix : torch.Tensor
+        The rotation matrix with dimensions [3, 3].
+
+    Returns
+    -------
+    torch.Tensor
+        The quaternion with dimensions [4].
+    """
+    return KG.rotation_matrix_to_quaternion(rotation_matrix)
+
 
 def rotation_6d_to_matrix(d6: Tensor) -> Tensor:
     """
