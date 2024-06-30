@@ -1,8 +1,20 @@
 # CHANGELOG
 
+## v0.6.0 (2024-06-30)
+
+### Chore
+
+* chore: add gsviewer and test tranning results ([`b6595f6`](https://github.com/Atticuszz/AB_GICP/commit/b6595f6f4e00bdd67fb0ff62eb68b3fc626c0e77))
+
+### Feature
+
+* feat: refactor gs_model and add Parser class ([`6d30853`](https://github.com/Atticuszz/AB_GICP/commit/6d308534e8c4b572589fe7437cc75eb06c0025cb))
+
 ## v0.5.0 (2024-06-27)
 
 ### Chore
+
+* chore(release): bump version to v0.5.0 ([`6fd59ff`](https://github.com/Atticuszz/AB_GICP/commit/6fd59ffdeb8ee0a31ede7af7bea48336f26cd088))
 
 * chore: add setter for RGBD class property ([`ab8348a`](https://github.com/Atticuszz/AB_GICP/commit/ab8348ac8a61ff56f7ca58932cb6f6f5faeecb90))
 
