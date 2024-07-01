@@ -71,7 +71,7 @@ class TrainingConfig:
 
 @dataclass
 class OptimizationConfig:
-    ssim_lambda: float = 0.3
+    ssim_lambda: float = 0.2
     init_opa: float = 0.1
     prune_opa: float = 0.005
     grow_grad2d: float = 0.0002

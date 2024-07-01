@@ -9,6 +9,7 @@ import torch
 import torch.nn.functional as F
 import tqdm
 from torch import Tensor
+from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingLR
 from torch.utils.tensorboard import SummaryWriter
 
 from src.my_gsplat.datasets.normalize import transform_points
@@ -43,7 +44,7 @@ class Runner(Config):
         with open(f"{self.res_dir.as_posix()}/self.json", "w") as f:
             json.dump(vars(self), f, cls=CustomEncoder)
 
-        for i, train_data in enumerate([self.parser[0]]):
+        for i, train_data in enumerate([self.parser[1000]]):
             # NOTE: train data loop
             train_data: AlignData
 
@@ -51,16 +52,27 @@ class Runner(Config):
             # models, optimizers and schedulers
             gs_splats = GSModel(train_data)
             print("Model initialized. Number of GS:", len(gs_splats))
+            cur_c2w = train_data.tar_c2w  # 4, 4
+            c2w_gt = train_data.src_c2w
             camera_opt = CameraOptModule(train_data.tar_c2w)
 
             schedulers = [
                 # means3d has a learning rate schedule, that end at 0.01 of the initial value
+                # torch.optim.lr_scheduler.ExponentialLR(
+                #     gs_splats.optimizers[0], gamma=0.01 ** (1.0 / max_steps)
+                # ),
                 torch.optim.lr_scheduler.ExponentialLR(
-                    gs_splats.optimizers[0], gamma=0.01 ** (1.0 / max_steps)
+                    camera_opt.optimizers[0], gamma=0.5 ** (1.0 / max_steps)
                 ),
                 torch.optim.lr_scheduler.ExponentialLR(
-                    camera_opt.optimizers[0], gamma=0.01 ** (1.0 / max_steps)
+                    camera_opt.optimizers[1], gamma=0.5 ** (1.0 / max_steps)
                 ),
+                # CosineAnnealingLR(
+                #     camera_opt.optimizers[0], T_max=max_steps, eta_min=1e-3 + 3 * 1e-4
+                # ),
+                # CosineAnnealingLR(
+                #     camera_opt.optimizers[1], T_max=max_steps, eta_min=1e-3 + 3 * 1e-4
+                # ),
             ]
 
             # nerf viewer
@@ -78,8 +90,7 @@ class Runner(Config):
                     tic = default_timer()
                 # with torch.autograd.detect_anomaly():
                 # NOTE: start forward
-                c2w = train_data.tar_c2w.unsqueeze(0)  # [1, 4, 4]
-                c2w_gt = train_data.src_c2w.unsqueeze(0)
+
                 Ks = self.parser.K.unsqueeze(0)  # [1, 3, 3]
 
                 pixels = train_data.pixels.unsqueeze(0) / 255.0  # [1, H, W, 3]
@@ -119,7 +130,7 @@ class Runner(Config):
 
                 info["means2d"].retain_grad()  # used for running stats
 
-                # loss
+                # NOTE:loss
                 l1loss = F.l1_loss(colors, pixels)
                 ssimloss = 1.0 - self.ssim(
                     pixels.permute(0, 3, 1, 2), colors.permute(0, 3, 1, 2)
@@ -131,8 +142,8 @@ class Runner(Config):
                 desc = f"loss={loss.item():.8f}| " f"sh degree={sh_degree_to_use}| "
 
                 # monitor the pose error if we inject noise
-                pose_err = F.l1_loss(c2w_gt, c2w)
-                desc += f"pose err={pose_err.item():.6f}| "
+                pose_err = F.mse_loss(c2w_gt, cur_c2w)
+                desc += f"pose err={pose_err.item():.10f}| "
                 pbar.set_description(desc)
 
                 if self.tb_every > 0 and step % self.tb_every == 0:
@@ -225,9 +236,9 @@ class Runner(Config):
                         )
 
                 # optimize
-                for optimizer in gs_splats.optimizers:
-                    optimizer.step()
-                    optimizer.zero_grad(set_to_none=True)
+                # for optimizer in gs_splats.optimizers:
+                #     optimizer.step()
+                #     optimizer.zero_grad(set_to_none=True)
                 for optimizer in camera_opt.optimizers:
                     optimizer.step()
                     optimizer.zero_grad(set_to_none=True)
@@ -254,7 +265,7 @@ class Runner(Config):
                     )
 
                 if step in [i - 1 for i in self.eval_steps] or step == max_steps - 1:
-                    self.eval(gs_splats, c2w, step)
+                    self.eval(gs_splats, cur_c2w, step)
 
                 # viewer
                 if not self.disable_viewer:
@@ -283,7 +294,7 @@ class Runner(Config):
         tic = time.time()
 
         colors, _, _ = gs_splats(
-            camtoworlds=c2w,
+            camtoworlds=c2w.unsqueeze(0),
             Ks=Ks,
             width=width,
             height=height,

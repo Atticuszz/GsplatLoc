@@ -133,37 +133,47 @@ class AppearanceOptModule(torch.nn.Module):
 @dataclass
 class CameraConfig:
     pose_opt: bool = True
-    pose_opt_lr: float = 1e-3
-    pose_opt_reg: float = 1e-3
+    trans_lr: float = 1e-3
+    quat_lr: float = 1e-3
+    pose_opt_reg: float = 1e-6
     pose_noise: float = 0.0
 
 
 class CameraOptModule(nn.Module, CameraConfig):
     def __init__(self, init_pose: Tensor):
         super().__init__()
-        self.c2w_last = init_pose
+        self.c2w_start = init_pose
         self.quaternion_cur = nn.Parameter(
             rotation_matrix_to_quaternion(init_pose[:3, :3])
         )
         self.translation_cur = nn.Parameter(init_pose[:3, 3])
         self.optimizers = self._create_optimizers()
 
-    def forward(self, points: Tensor):
+    def forward(self, points: Tensor) -> tuple[Tensor, Tensor]:
+        """
+
+        Parameters
+        ----------
+        points: src point ,N,3
+
+        Returns
+        -------
+            tuple[new_points,cur_c2w]
+        """
         cur_rotation = quaternion_to_rotation_matrix(self.quaternion_cur)
         cur_c2w = construct_full_pose(cur_rotation, self.translation_cur)
-        transform_matrix = cur_c2w @ torch.linalg.inv(self.c2w_last)
+        transform_matrix = cur_c2w @ torch.linalg.inv(self.c2w_start)
         new_points = kornia.geometry.transform_points(
             transform_matrix.unsqueeze(0), points
         )
-        self.c2w_last = cur_c2w.detach()
         return new_points, cur_c2w
 
     def _create_optimizers(self) -> list[Optimizer]:
         params = [
             # name, value, lr
             # ("means3d", self.means3d, self.lr_means3d),
-            ("quat", self.quaternion_cur, self.pose_opt_lr),
-            ("trans", self.translation_cur, self.pose_opt_lr),
+            ("quat", self.quaternion_cur, self.quat_lr),
+            ("trans", self.translation_cur, self.trans_lr),
         ]
         optimizers = [
             Adam(
@@ -184,7 +194,7 @@ class CameraOptModule(nn.Module, CameraConfig):
 @dataclass
 class GsConfig:
     ssim_lambda: float = 0.2
-    init_opa: float = 0.1
+    init_opa: float = 1.0
     prune_opa: float = 0.005
     grow_grad2d: float = 0.0002
     grow_scale3d: float = 0.01

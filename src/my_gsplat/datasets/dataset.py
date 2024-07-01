@@ -152,7 +152,7 @@ class Parser(Replica):
 
     def __getitem__(self, index: int) -> AlignData:
         assert index < len(self)
-        tar, src = super().__getitem__(index), super().__getitem__(index + 5)
+        tar, src = super().__getitem__(index), super().__getitem__(index + 2)
         tar_normed, src_normed = normalize_2(tar, src)
         scene_scale_normed = scene_scale([tar_normed, src_normed])
 
