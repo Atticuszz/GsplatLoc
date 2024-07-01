@@ -1,8 +1,20 @@
 # CHANGELOG
 
+## v0.6.1 (2024-07-01)
+
+### Chore
+
+* chore: add cameraopt nn.module class ([`4f3f11c`](https://github.com/Atticuszz/AB_GICP/commit/4f3f11c6625df74bae282a2013a48310aecacbab))
+
+### Fix
+
+* fix: correct camera model.py ([`e4fe449`](https://github.com/Atticuszz/AB_GICP/commit/e4fe4496dd734902edc5aba303f53d69bfdb74ca))
+
 ## v0.6.0 (2024-06-30)
 
 ### Chore
+
+* chore(release): bump version to v0.6.0 ([`c3e6c21`](https://github.com/Atticuszz/AB_GICP/commit/c3e6c21d2ffe6a36941e604e5e06c66e6eaaa813))
 
 * chore: add gsviewer and test tranning results ([`b6595f6`](https://github.com/Atticuszz/AB_GICP/commit/b6595f6f4e00bdd67fb0ff62eb68b3fc626c0e77))
 
