@@ -17,7 +17,14 @@ from src.my_gsplat.datasets.normalize import transform_points
 from .datasets.base import Config
 from .datasets.dataset import AlignData, Parser
 from .model import CameraOptModule, GSModel
-from .utils import DEVICE, CustomEncoder, set_random_seed, to_tensor
+from .utils import (
+    DEVICE,
+    CustomEncoder,
+    set_random_seed,
+    to_tensor,
+    calculate_translation_error,
+    calculate_rotation_error,
+)
 
 
 class Runner(Config):
@@ -44,7 +51,7 @@ class Runner(Config):
         with open(f"{self.res_dir.as_posix()}/self.json", "w") as f:
             json.dump(vars(self), f, cls=CustomEncoder)
 
-        for i, train_data in enumerate([self.parser[1000]]):
+        for i, train_data in enumerate([self.parser[728]]):
             # NOTE: train data loop
             train_data: AlignData
 
@@ -62,10 +69,10 @@ class Runner(Config):
                 #     gs_splats.optimizers[0], gamma=0.01 ** (1.0 / max_steps)
                 # ),
                 torch.optim.lr_scheduler.ExponentialLR(
-                    camera_opt.optimizers[0], gamma=0.5 ** (1.0 / max_steps)
+                    camera_opt.optimizers[0], gamma=0.2 ** (1.0 / max_steps)
                 ),
                 torch.optim.lr_scheduler.ExponentialLR(
-                    camera_opt.optimizers[1], gamma=0.5 ** (1.0 / max_steps)
+                    camera_opt.optimizers[1], gamma=0.2 ** (1.0 / max_steps)
                 ),
                 # CosineAnnealingLR(
                 #     camera_opt.optimizers[0], T_max=max_steps, eta_min=1e-3 + 3 * 1e-4
@@ -135,16 +142,56 @@ class Runner(Config):
                 ssimloss = 1.0 - self.ssim(
                     pixels.permute(0, 3, 1, 2), colors.permute(0, 3, 1, 2)
                 )
-                loss = l1loss * (1.0 - self.ssim_lambda) + ssimloss * self.ssim_lambda
-                # BUG: backward failed
+                loss = (
+                    l1loss * (1.0 - self.ssim_lambda) + ssimloss * self.ssim_lambda
+                ) * (1 - self.depth_lambda)
+                if depths is not None:
+                    depthloss = (
+                        F.l1_loss(
+                            depths, train_data.src_depth.unsqueeze(0).unsqueeze(-1)
+                        )
+                        * train_data.scene_scale
+                    )
+                    loss += depthloss * self.depth_lambda
+
                 loss.backward()
 
-                desc = f"loss={loss.item():.8f}| " f"sh degree={sh_degree_to_use}| "
+                desc = f"loss={loss.item():.8f}|"
+                # desc = f"loss={loss.item():.8f}| " f"sh degree={sh_degree_to_use}| "
 
-                # monitor the pose error if we inject noise
-                pose_err = F.mse_loss(c2w_gt, cur_c2w)
-                desc += f"pose err={pose_err.item():.10f}| "
+                # NOTE: monitor the pose error if we inject noise
+                pose_err = F.l1_loss(c2w_gt, cur_c2w)
+                # desc += f"pose err={pose_err.item():.10f}| "
+                # pbar.set_description(desc)
+
+                trans_err = calculate_translation_error(
+                    cur_c2w.squeeze(-1).squeeze(0), c2w_gt.squeeze(-1).squeeze(0)
+                )
+                desc += f"trans_err err={trans_err:.10f}| "
                 pbar.set_description(desc)
+
+                rotation_err = calculate_rotation_error(
+                    cur_c2w.squeeze(-1).squeeze(0), c2w_gt.squeeze(-1).squeeze(0)
+                )
+                desc += f"rotation_err err={rotation_err:.10f}| "
+                pbar.set_description(desc)
+                # NOTE: early stop
+                if (
+                    rotation_err < self.best_rotation_error
+                    and trans_err < self.best_translation_error
+                ):
+                    self.best_rotation_error = rotation_err
+                    self.best_translation_error = trans_err
+                    self.counter = 0  # 重置计数器
+                else:
+                    self.counter += 1
+                pbar.set_description(desc)
+                if self.counter >= self.patience:
+                    desc += f"\nEarly stopping triggered at step {step}|"
+                    desc += f"\nbest_rotation_error:{self.best_rotation_error}, best_translation_error: {self.best_translation_error}|"
+                    pbar.set_description(desc)
+                    self.counter = 0
+                    break
 
                 if self.tb_every > 0 and step % self.tb_every == 0:
                     mem = torch.cuda.max_memory_allocated() / 1024**3

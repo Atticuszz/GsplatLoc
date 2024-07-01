@@ -134,8 +134,9 @@ class AppearanceOptModule(torch.nn.Module):
 class CameraConfig:
     pose_opt: bool = True
     trans_lr: float = 1e-3
-    quat_lr: float = 1e-3
-    pose_opt_reg: float = 1e-6
+    quat_lr: float = 5 * 1e-4
+    quat_opt_reg: float = 1e-3
+    trans_opt_reg: float = 1e-3
     pose_noise: float = 0.0
 
 
@@ -184,7 +185,9 @@ class CameraOptModule(nn.Module, CameraConfig):
                         "name": name,
                     }
                 ],
-                weight_decay=self.pose_opt_reg,
+                weight_decay=(
+                    self.quat_opt_reg if name == "quat" else self.trans_opt_reg
+                ),
             )
             for name, param, lr in params
         ]

@@ -91,6 +91,11 @@ class OptimizationConfig:
     psnr: PeakSignalNoiseRatio = None
     lpips: LearnedPerceptualImagePatchSimilarity = None
 
+    patience = 200
+    best_rotation_error = float("inf")
+    best_translation_error = float("inf")
+    counter = 0
+
     def init_loss(self):
         self.ssim = StructuralSimilarityIndexMeasure(data_range=1.0).to(DEVICE)
         self.psnr = PeakSignalNoiseRatio(data_range=1.0).to(DEVICE)
@@ -115,8 +120,8 @@ class AppearanceConfig:
 
 @dataclass
 class DepthLossConfig:
-    depth_loss: bool = False
-    depth_lambda: float = 1e-2
+    depth_loss: bool = True
+    depth_lambda: float = 0.5
 
 
 @dataclass
@@ -179,6 +184,7 @@ class AlignData:
     points: Tensor  # N,3
     tar_points: Tensor
     src_points: Tensor
+    src_depth: Tensor
     tar_c2w: Tensor  # 4,4
     src_c2w: Tensor  # 4,4
     tar_nums: int  # for slice tar and src

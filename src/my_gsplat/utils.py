@@ -165,13 +165,50 @@ class CustomEncoder(JSONEncoder):
             return str(obj)
 
 
-def print_parameters(**kwargs):
-    for key, value in kwargs.items():
-        print(f"{key}:")
-        if isinstance(value, torch.Tensor):
-            print(f"  Shape: {value.shape}")
-            print(f"  Dtype: {value.dtype}")
-            print(f"  Device: {value.device}")
-            print(f"  Memory: {value.element_size() * value.nelement()} bytes")
-        else:
-            print(f"  Value: {value}")
+def calculate_translation_error(
+    estimated_pose: torch.Tensor, true_pose: torch.Tensor
+) -> float:
+    """
+    Calculate the translation error between estimated pose and true pose using PyTorch.
+    Parameters
+    ----------
+    estimated_pose: torch.Tensor, shape=(4, 4)
+    true_pose: torch.Tensor, shape=(4, 4)
+
+    Returns
+    -------
+    translation_error: float
+    """
+    t_est = estimated_pose[:3, 3]
+    t_true = true_pose[:3, 3]
+    translation_error = torch.norm(t_est - t_true).item()
+    return translation_error
+
+
+def calculate_rotation_error(
+    estimated_pose: torch.Tensor, true_pose: torch.Tensor
+) -> float:
+    """
+    Calculate the rotation error between estimated pose and true pose using PyTorch.
+    Parameters
+    ----------
+    estimated_pose: torch.Tensor, shape=(4, 4)
+    true_pose: torch.Tensor, shape=(4, 4)
+
+    Returns
+    -------
+    rotation_error: float
+    """
+    R_est = estimated_pose[:3, :3]
+    R_true = true_pose[:3, :3]
+    delta_R = torch.mm(R_est, R_true.transpose(0, 1))
+    trace_value = torch.trace(delta_R)
+    cos_theta = (trace_value - 1) / 2
+    cos_theta = torch.clamp(
+        cos_theta, -1, 1
+    )  # # Ensure the value is within a valid range
+    theta = torch.acos(cos_theta)
+
+    # Convert radians to degrees manually
+    rotation_error = (theta * 180 / torch.pi).item()
+    return rotation_error

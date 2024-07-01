@@ -152,7 +152,7 @@ class Parser(Replica):
 
     def __getitem__(self, index: int) -> AlignData:
         assert index < len(self)
-        tar, src = super().__getitem__(index), super().__getitem__(index + 2)
+        tar, src = super().__getitem__(index), super().__getitem__(index + 1)
         tar_normed, src_normed = normalize_2(tar, src)
         scene_scale_normed = scene_scale([tar_normed, src_normed])
 
@@ -170,6 +170,7 @@ class Parser(Replica):
             points,
             tar_normed.points,
             src_normed.points,
+            src_normed.depth,
             tar_c2w=tar_normed.pose,
             src_c2w=src_normed.pose,
             tar_nums=tar_normed.points.shape[0],
