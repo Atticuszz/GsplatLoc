@@ -3,7 +3,7 @@ from typing import Literal, NamedTuple
 
 import numpy as np
 
-from src.component import Scan2ScanICP
+# from src.component import Scan2ScanICP
 from src.eval.logger import WandbLogger
 from src.eval.utils import (
     calculate_pointcloud_rmse,
@@ -11,16 +11,9 @@ from src.eval.utils import (
     calculate_translation_error,
     diff_pcd_COM,
 )
-from src.pose_estimation import DEVICE
-from src.pose_estimation.model import (
-    PoseEstimationModel,
-)
+from src.my_gsplat.datasets.dataset import DataLoaderBase, Replica, RGBDImage
 
 # from src.pose_estimation.train_eval import train_model_with_adam, train_model_with_LBFGS
-
-from src.slam_data import Replica, RGBDImage
-from src.slam_data.dataset import DataLoaderBase
-from src.utils import to_tensor
 
 
 class RegistrationConfig(NamedTuple):
@@ -66,69 +59,69 @@ class ExperimentBase:
         raise NotImplementedError
 
 
-class ICPExperiment(ExperimentBase):
-    def __init__(
-        self,
-        registration_config: RegistrationConfig,
-        wandb_config: WandbConfig,
-    ):
-        super().__init__(
-            backends=Scan2ScanICP(**registration_config.as_dict()),
-            wandb_config=wandb_config,
-            extra_config=registration_config.as_dict(),
-        ),
-
-        # self.grid_downsample = registration_config.grid_downsample_resolution
-        # self.knn = registration_config.knn
-
-    def run(self, max_images: int = 2000):
-
-        pre_pose = None
-        for i, rgbd_image in enumerate(self.data):
-
-            if i >= max_images:
-                break
-            # print(f"Processing image {i + 1}/{len(data)}...")
-            rgbd_image: RGBDImage
-            # convert tensors to numpy arrays
-            if rgbd_image.pose is None:
-                raise ValueError("Pose is not available.")
-            pre_pose = rgbd_image.pose
-
-            if self.backends.registration_type == "COLORED_ICP":
-                new_pcd = rgbd_image.color_pcds(True)
-            else:
-                new_pcd = rgbd_image.color_pcds()
-
-            # NOTE: align interface
-            if i == 0:
-                # res = self.backends.align(new_pcd, rgbd_image.pose)
-                res = self.backends.align(new_pcd, rgbd_image.pose)
-                continue
-            else:
-                T_last_current = rgbd_image.pose @ np.linalg.inv(pre_pose)
-                # res = self.backends.align(new_pcd, T_last_current, knn=self.knn)
-                res = self.backends.align(new_pcd, T_last_current)
-
-            # NOTE: align data
-            # self.logger.log_align_error(res.error, i)
-            # self.logger.log_iter_times(res.iterations, i)
-            # NOTE: eT
-            est_pose = self.backends.T_world_camera
-            eT = calculate_translation_error(est_pose, rgbd_image.pose)
-            self.logger.log_translation_error(eT, i)
-            # NOTE:ER
-            eR = calculate_rotation_error(est_pose, rgbd_image.pose)
-            self.logger.log_rotation_error(eR, i)
-            # NOTE:RMSE
-            gt_pcd = rgbd_image.camera_to_world(rgbd_image.pose, new_pcd)
-            est_pcd = rgbd_image.camera_to_world(est_pose, new_pcd)
-            rmse = calculate_pointcloud_rmse(est_pcd, gt_pcd)
-            self.logger.log_rmse_pcd(rmse, i)
-            # NOTE:COM
-            com = diff_pcd_COM(est_pcd, gt_pcd)
-            self.logger.log_com_diff(com, i)
-        self.logger.finish()
+# class ICPExperiment(ExperimentBase):
+#     def __init__(
+#         self,
+#         registration_config: RegistrationConfig,
+#         wandb_config: WandbConfig,
+#     ):
+#         super().__init__(
+#             backends=Scan2ScanICP(**registration_config.as_dict()),
+#             wandb_config=wandb_config,
+#             extra_config=registration_config.as_dict(),
+#         ),
+#
+#         # self.grid_downsample = registration_config.grid_downsample_resolution
+#         # self.knn = registration_config.knn
+#
+#     def run(self, max_images: int = 2000):
+#
+#         pre_pose = None
+#         for i, rgbd_image in enumerate(self.data):
+#
+#             if i >= max_images:
+#                 break
+#             # print(f"Processing image {i + 1}/{len(data)}...")
+#             rgbd_image: RGBDImage
+#             # convert tensors to numpy arrays
+#             if rgbd_image.pose is None:
+#                 raise ValueError("Pose is not available.")
+#             pre_pose = rgbd_image.pose
+#
+#             if self.backends.registration_type == "COLORED_ICP":
+#                 new_pcd = rgbd_image.color_pcds(True)
+#             else:
+#                 new_pcd = rgbd_image.color_pcds()
+#
+#             # NOTE: align interface
+#             if i == 0:
+#                 # res = self.backends.align(new_pcd, rgbd_image.pose)
+#                 res = self.backends.align(new_pcd, rgbd_image.pose)
+#                 continue
+#             else:
+#                 T_last_current = rgbd_image.pose @ np.linalg.inv(pre_pose)
+#                 # res = self.backends.align(new_pcd, T_last_current, knn=self.knn)
+#                 res = self.backends.align(new_pcd, T_last_current)
+#
+#             # NOTE: align data
+#             # self.logger.log_align_error(res.error, i)
+#             # self.logger.log_iter_times(res.iterations, i)
+#             # NOTE: eT
+#             est_pose = self.backends.T_world_camera
+#             eT = calculate_translation_error(est_pose, rgbd_image.pose)
+#             self.logger.log_translation_error(eT, i)
+#             # NOTE:ER
+#             eR = calculate_rotation_error(est_pose, rgbd_image.pose)
+#             self.logger.log_rotation_error(eR, i)
+#             # NOTE:RMSE
+#             gt_pcd = rgbd_image.camera_to_world(rgbd_image.pose, new_pcd)
+#             est_pcd = rgbd_image.camera_to_world(est_pose, new_pcd)
+#             rmse = calculate_pointcloud_rmse(est_pcd, gt_pcd)
+#             self.logger.log_rmse_pcd(rmse, i)
+#             # NOTE:COM
+#             com = diff_pcd_COM(est_pcd, gt_pcd)
+#             self.logger.log_com_diff(com, i)
+#         self.logger.finish()
 
 
 #

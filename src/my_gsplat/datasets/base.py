@@ -91,9 +91,10 @@ class OptimizationConfig:
     psnr: PeakSignalNoiseRatio = None
     lpips: LearnedPerceptualImagePatchSimilarity = None
 
+    early_stop: bool = False
     patience = 200
-    best_rotation_error = float("inf")
-    best_translation_error = float("inf")
+    best_eR = float("inf")
+    best_eT = float("inf")
     counter = 0
 
     def init_loss(self):

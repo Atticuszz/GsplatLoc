@@ -1,3 +1,4 @@
+import kornia
 import kornia.geometry as KG
 import torch
 import torch.nn.functional as F
@@ -75,6 +76,36 @@ def quaternion_to_rotation_matrix(quaternion: Tensor) -> Tensor:
 
     normalized_quaternion = quaternion / torch.norm(quaternion)
     return KG.quaternion_to_rotation_matrix(normalized_quaternion)
+
+
+def compute_silhouette_diff(depth: Tensor, rastered_depth: Tensor) -> Tensor:
+    """
+    Compute the difference between the sobel edges of two depth images.
+
+    Parameters
+    ----------
+    depth : torch.Tensor
+        The depth image with dimensions [height, width].
+    rastered_depth : torch.Tensor
+        The depth image with dimensions [height, width].
+
+    Returns
+    -------
+    torch.Tensor
+        The silhouette difference between the two depth images with dimensions [height, width].
+    """
+    if depth.dim() == 2:
+        depth = depth.unsqueeze(0).unsqueeze(0)
+    else:
+        depth = depth.unsqueeze(1)
+    if rastered_depth.dim() == 2:
+        rastered_depth = rastered_depth.unsqueeze(0).unsqueeze(0)
+    else:
+        rastered_depth = rastered_depth.unsqueeze(1)
+    edge_depth = kornia.filters.sobel(depth)
+    edge_rastered_depth = kornia.filters.sobel(rastered_depth)
+    silhouette_diff = torch.abs(edge_depth - edge_rastered_depth).squeeze()
+    return silhouette_diff
 
 
 def generate_depth_map(

@@ -5,7 +5,9 @@ from matplotlib import pyplot as plt
 from torch import Tensor
 
 import wandb
-from src.pose_estimation.gemoetry import compute_silhouette_diff
+from torch.optim import Optimizer
+
+from src.my_gsplat.geometry import compute_silhouette_diff
 
 
 class WandbLogger:
@@ -50,8 +52,44 @@ class WandbLogger:
         """
         wandb.log({"COM Difference": com_diff}, step=step)
 
-    def log_align_fps(self, fps: float, step: int):
-        wandb.log({"Alignment Fps": fps}, step=step)
+    # BUG: failed to show in wandb
+    def log_LR(self, model: torch.nn.Module, schedulers: list, step: int):
+        """
+        Log the learning rates of all optimizers and their scheduler types.
+        :param model: The model containing the optimizers
+        :param schedulers: List of schedulers corresponding to the optimizers
+        :param step: Current step number
+        """
+        lr_info = {}
+        scheduler_info = {}
+        for i, (optimizer, scheduler) in enumerate(zip(model.optimizers, schedulers)):
+            for j, param_group in enumerate(optimizer.param_groups):
+                lr = param_group["lr"]
+                name = param_group.get("name", f"optimizer_{i}_group_{j}")
+                lr_info[f"Learning Rate/{name}"] = lr
+                scheduler_info[f"Scheduler Type/{name}"] = scheduler.__class__.__name__
+
+        wandb.log(lr_info, step=step)
+        wandb.log(scheduler_info, step=step)
+
+    # BUG: failed to show in wandb
+    def log_gradients(self, model: torch.nn.Module, step: int):
+        """
+        Log the gradients of model parameters as histograms.
+        :param model: The model whose gradients you want to log
+        :param step: Current step number
+        """
+        gradients = {}
+        for i, optimizer in enumerate(model.optimizers):
+            for j, param_group in enumerate(optimizer.param_groups):
+                for k, param in enumerate(param_group["params"]):
+                    if param.grad is not None:
+                        name = f"optimizer_{i}_group_{j}_param_{k}"
+                        gradients[f"{model.__class__.__name__}'s gradients/{name}"] = (
+                            wandb.Histogram(param.grad.cpu().numpy())
+                        )
+
+        wandb.log(gradients, step=step)
 
     def log_iter_times(self, iter_times: int, step: int):
         """
@@ -65,17 +103,11 @@ class WandbLogger:
         """
         wandb.log({"Alignment Error": align_error}, step=step)
 
-    def log_loss(self, loss_type: str, loss_val: float, step: int):
+    def log_loss(self, name: str, loss_val: float, step: int, l_type: str = ""):
         """
         Log the loss to wandb.
         """
-        wandb.log({f"{loss_type}": loss_val}, step=step)
-
-    def log_lr(self, lr: float, step: int):
-        """
-        Log the learning rate to wandb.
-        """
-        wandb.log({"Learning Rate": lr}, step=step)
+        wandb.log({f"{name}_{l_type}": loss_val}, step=step)
 
     def finish(self):
         """
@@ -111,10 +143,18 @@ class WandbLogger:
         fig, axs = plt.subplots(2, 3, figsize=(fig_width, fig_height))
 
         if color is not None:
-            color = color.unsqueeze(0) if color.dim() == 3 else color
-            axs[0, 0].imshow(color.detach().cpu().permute(0, 2, 3, 1)[0])
+            if color.dim() == 3 and color.shape[1] == 3:  # (H, C, W)
+                color = color.permute(1, 2, 0)  # -> (C, W, H)
+            if color.dim() == 3:
+                color = color.unsqueeze(0)  # -> B, C, W, H
+
+            # (B, H, W, C)
+            if color.shape[1] == 3:
+                color = color.permute(0, 2, 3, 1)
+
+            axs[0, 0].imshow(color[0].detach().cpu())
             axs[0, 0].set_title(
-                f"Ground Truth RGB\n{color_loss['type']}: {color_loss['value']:.2f}"
+                f"Ground Truth RGB\n{color_loss['type']}: {color_loss['value']:.4f}"
             )
         else:
             axs[0, 0].set_visible(False)  # 如果没有提供彩色图像则隐藏
@@ -131,12 +171,15 @@ class WandbLogger:
             )
 
         if rastered_color is not None:
-            rastered_color = (
-                rastered_color.unsqueeze(0)
-                if rastered_color.dim() == 3
-                else rastered_color
-            )
-            axs[1, 0].imshow(rastered_color.detach().cpu().permute(0, 2, 3, 1)[0])
+            if rastered_color.dim() == 3 and rastered_color.shape[1] == 3:  # (H, C, W)
+                rastered_color = rastered_color.permute(1, 2, 0)  # -> (C, W, H)
+            if rastered_color.dim() == 3:
+                rastered_color = rastered_color.unsqueeze(0)  # -> B, C, W, H
+
+            # (B, H, W, C)
+            if rastered_color.shape[1] == 3:
+                rastered_color = rastered_color.permute(0, 2, 3, 1)
+            axs[1, 0].imshow(rastered_color[0].detach().cpu())
             axs[1, 0].set_title(
                 f"Rasterized RGB\n{color_loss['type']}: {color_loss['value']:.4f}"
             )

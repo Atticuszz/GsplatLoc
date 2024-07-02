@@ -4,12 +4,22 @@ import torch
 
 from my_gsplat.gs_trainer import Runner
 from pose_estimation import DEVICE
+from src.eval.experiment import WandbConfig
+from src.eval.logger import WandbLogger
+
 
 # from my_gsplat.trainer import Runner
 
 
 def main():
-    runner = Runner()
+    config = WandbConfig(
+        sub_set="room0",
+        algorithm="gsplat",
+        implementation="pytorch",
+        num_iters=2000,
+    )
+    logger = WandbLogger("gsplat", config.as_dict())
+    runner = Runner(logger)
     runner.adjust_steps()
     if runner.ckpt is not None:
         # run eval only

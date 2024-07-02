@@ -12,6 +12,7 @@ from torch import Tensor
 from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingLR
 from torch.utils.tensorboard import SummaryWriter
 
+from src.eval.logger import WandbLogger
 from src.my_gsplat.datasets.normalize import transform_points
 
 from .datasets.base import Config
@@ -30,7 +31,10 @@ from .utils import (
 class Runner(Config):
     """Engine for training and testing."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        logger: WandbLogger | None = None,
+    ) -> None:
         super().__init__()
         set_random_seed(42)
         # Setup output directories.
@@ -38,6 +42,8 @@ class Runner(Config):
 
         # Tensorboard
         self.writer = SummaryWriter(log_dir=f"{self.result_dir}/tb")
+
+        self.logger = logger
 
         # load data
         self.parser = Parser()
@@ -83,7 +89,8 @@ class Runner(Config):
             ]
 
             # nerf viewer
-            self.init_view(gs_splats.viewer_render_fn)
+            if not self.disable_viewer:
+                self.init_view(gs_splats.viewer_render_fn)
             init_step = 0
             pbar = tqdm.tqdm(range(init_step, max_steps))
             for step in pbar:
@@ -145,70 +152,95 @@ class Runner(Config):
                 loss = (
                     l1loss * (1.0 - self.ssim_lambda) + ssimloss * self.ssim_lambda
                 ) * (1 - self.depth_lambda)
-                if depths is not None:
-                    depthloss = (
-                        F.l1_loss(
-                            depths, train_data.src_depth.unsqueeze(0).unsqueeze(-1)
-                        )
-                        * train_data.scene_scale
-                    )
-                    loss += depthloss * self.depth_lambda
-
+                assert torch.is_tensor(depths)
+                depth_loss = (
+                    F.l1_loss(depths, train_data.src_depth.unsqueeze(0).unsqueeze(-1))
+                    * train_data.scene_scale
+                )
+                loss += depth_loss * self.depth_lambda
                 loss.backward()
 
-                desc = f"loss={loss.item():.8f}|"
-                # desc = f"loss={loss.item():.8f}| " f"sh degree={sh_degree_to_use}| "
-
                 # NOTE: monitor the pose error if we inject noise
-                pose_err = F.l1_loss(c2w_gt, cur_c2w)
-                # desc += f"pose err={pose_err.item():.10f}| "
-                # pbar.set_description(desc)
-
-                trans_err = calculate_translation_error(
+                eT = calculate_translation_error(
                     cur_c2w.squeeze(-1).squeeze(0), c2w_gt.squeeze(-1).squeeze(0)
                 )
-                desc += f"trans_err err={trans_err:.10f}| "
-                pbar.set_description(desc)
 
-                rotation_err = calculate_rotation_error(
+                eR = calculate_rotation_error(
                     cur_c2w.squeeze(-1).squeeze(0), c2w_gt.squeeze(-1).squeeze(0)
                 )
-                desc += f"rotation_err err={rotation_err:.10f}| "
-                pbar.set_description(desc)
-                # NOTE: early stop
-                if (
-                    rotation_err < self.best_rotation_error
-                    and trans_err < self.best_translation_error
-                ):
-                    self.best_rotation_error = rotation_err
-                    self.best_translation_error = trans_err
-                    self.counter = 0  # 重置计数器
-                else:
-                    self.counter += 1
-                pbar.set_description(desc)
-                if self.counter >= self.patience:
-                    desc += f"\nEarly stopping triggered at step {step}|"
-                    desc += f"\nbest_rotation_error:{self.best_rotation_error}, best_translation_error: {self.best_translation_error}|"
-                    pbar.set_description(desc)
-                    self.counter = 0
-                    break
 
-                if self.tb_every > 0 and step % self.tb_every == 0:
-                    mem = torch.cuda.max_memory_allocated() / 1024**3
-                    self.writer.add_scalar("train/loss", loss.item(), step)
-                    self.writer.add_scalar("train/l1loss", l1loss.item(), step)
-                    self.writer.add_scalar("train/ssimloss", ssimloss.item(), step)
-                    self.writer.add_scalar("train/num_GS", len(gs_splats), step)
-                    self.writer.add_scalar("train/mem", mem, step)
-                    if self.tb_save_image:
-                        canvas = (
-                            torch.cat([pixels, colors], dim=2).detach().cpu().numpy()
+                if self.logger is not None:
+                    # loss
+                    self.logger.log_loss("total_loss", loss.item(), step=step)
+                    self.logger.log_loss(
+                        "pixels", l1loss.item(), step=step, l_type="l1"
+                    )
+                    self.logger.log_loss(
+                        "pixels", ssimloss.item(), step=step, l_type="ssim"
+                    )
+                    self.logger.log_loss(
+                        "depth", depth_loss.item(), step=step, l_type="l1"
+                    )
+                    self.logger.log_loss(
+                        "depth", depth_loss.item(), step=step, l_type="l1"
+                    )
+                    # self.logger.log_loss(
+                    #     "silhouette_loss_mse", silhouette_loss.item(), step=step
+                    # )
+                    # Error
+                    self.logger.log_translation_error(eT, step=step)
+                    self.logger.log_rotation_error(eR, step=step)
+
+                    # LR
+                    self.logger.log_LR(
+                        model=camera_opt,
+                        schedulers=schedulers,
+                        step=step,
+                    )
+                    # self.logger.log_LR(
+                    #     model=camera_opt,
+                    #     schedulers=schedulers,
+                    #     step=step,
+                    # )
+                    # gradients
+                    self.logger.log_gradients(camera_opt, step=step)
+                    self.logger.log_gradients(gs_splats, step=step)
+
+                    # IMAGE
+                    if step % 10 == 0:
+                        self.logger.plot_rgbd(
+                            depths.squeeze(-1).squeeze(0),
+                            train_data.src_depth,
+                            # combined_projected_depth,
+                            {
+                                "type": "l1",
+                                "value": depth_loss.item(),
+                            },
+                            color=train_data.pixels / 255.0,
+                            rastered_color=colors.squeeze(0),
+                            color_loss={"type": "pixels_l1", "value": l1loss.item()},
+                            step=step,
+                            fig_title="gs_splats Visualization",
                         )
-                        canvas = canvas.reshape(-1, *canvas.shape[2:])
-                        self.writer.add_image("train/render", canvas, step)
-                    self.writer.flush()
 
-                # update running stats for prunning & growing
+                # NOTE: early stop
+                desc = f"loss={loss.item():.8f}|"
+                desc += f"best_eR:{self.best_eR}| best_eT: {self.best_eT}|"
+                pbar.set_description(desc)
+                if self.early_stop:
+                    if eR < self.best_eR and eT < self.best_eT:
+                        self.best_eR = eR
+                        self.best_eT = eT
+                        self.counter = 0  # 重置计数器
+                    else:
+                        self.counter += 1
+                    if self.counter >= self.patience:
+                        desc += f"\nEarly stopping triggered at step {step}|"
+                        pbar.set_description(desc)
+                        self.counter = 0
+                        break
+
+                # NOTE: update running stats for prunning & growing
                 if step < self.refine_stop_iter:
                     gs_splats.update_running_stats(info)
 
