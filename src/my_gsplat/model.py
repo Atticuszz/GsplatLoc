@@ -20,6 +20,7 @@ from .geometry import (
     rotation_6d_to_matrix,
     quaternion_to_rotation_matrix,
     construct_full_pose,
+    matrix_to_rotation_6d,
 )
 from .utils import DEVICE, knn, normalized_quat_to_rotmat, rgb_to_sh, to_tensor
 from .geometry import rotation_matrix_to_quaternion
@@ -64,85 +65,20 @@ class _CameraOptModule(torch.nn.Module):
         return torch.matmul(camtoworlds, transform)
 
 
-class AppearanceOptModule(torch.nn.Module):
-    """Appearance optimization module."""
-
-    def __init__(
-        self,
-        n: int,
-        feature_dim: int,
-        embed_dim: int = 16,
-        sh_degree: int = 3,
-        mlp_width: int = 64,
-        mlp_depth: int = 2,
-    ):
-        super().__init__()
-        self.embed_dim = embed_dim
-        self.sh_degree = sh_degree
-        self.embeds = torch.nn.Embedding(n, embed_dim)
-        layers = []
-        layers.append(
-            torch.nn.Linear(embed_dim + feature_dim + (sh_degree + 1) ** 2, mlp_width)
-        )
-        layers.append(torch.nn.ReLU(inplace=True))
-        for _ in range(mlp_depth - 1):
-            layers.append(torch.nn.Linear(mlp_width, mlp_width))
-            layers.append(torch.nn.ReLU(inplace=True))
-        layers.append(torch.nn.Linear(mlp_width, 3))
-        self.color_head = torch.nn.Sequential(*layers)
-
-    def forward(
-        self, features: Tensor, embed_ids: Tensor, dirs: Tensor, sh_degree: int
-    ) -> Tensor:
-        """Adjust appearance based on embeddings.
-
-        Args:
-            features: (N, feature_dim)
-            embed_ids: (C,)
-            dirs: (C, N, 3)
-
-        Returns:
-            colors: (C, N, 3)
-        """
-        from gsplat.cuda._torch_impl import _eval_sh_bases_fast
-
-        C, N = dirs.shape[:2]
-        # Camera embeddings
-        if embed_ids is None:
-            embeds = torch.zeros(C, self.embed_dim, device=features.device)
-        else:
-            embeds = self.embeds(embed_ids)  # [C, D2]
-        embeds = embeds[:, None, :].expand(-1, N, -1)  # [C, N, D2]
-        # GS features
-        features = features[None, :, :].expand(C, -1, -1)  # [C, N, D1]
-        # View directions
-        dirs = F.normalize(dirs, dim=-1)  # [C, N, 3]
-        num_bases_to_use = (sh_degree + 1) ** 2
-        num_bases = (self.sh_degree + 1) ** 2
-        sh_bases = torch.zeros(C, N, num_bases, device=features.device)  # [C, N, K]
-        sh_bases[:, :, :num_bases_to_use] = _eval_sh_bases_fast(num_bases_to_use, dirs)
-        # Get colors
-        if self.embed_dim > 0:
-            h = torch.cat([embeds, features, sh_bases], dim=-1)  # [C, N, D1 + D2 + K]
-        else:
-            h = torch.cat([features, sh_bases], dim=-1)
-        colors = self.color_head(h)
-        return colors
-
-
-@dataclass
+# NOTE: to prevent to overwrite __hash__,which lead to failed to callmodule.named_parameters():
+@dataclass(frozen=True)
 class CameraConfig:
-    pose_opt: bool = True
     trans_lr: float = 1e-3
     quat_lr: float = 5 * 1e-4
     quat_opt_reg: float = 1e-3
     trans_opt_reg: float = 1e-3
-    pose_noise: float = 0.0
 
 
-class CameraOptModule(nn.Module, CameraConfig):
-    def __init__(self, init_pose: Tensor):
+# NOTE: quat + tans
+class CameraOptModule_quat_tans(nn.Module):
+    def __init__(self, init_pose: Tensor, *, config: CameraConfig = CameraConfig()):
         super().__init__()
+        self.config = config
         self.c2w_start = init_pose
         self.quaternion_cur = nn.Parameter(
             rotation_matrix_to_quaternion(init_pose[:3, :3])
@@ -173,8 +109,8 @@ class CameraOptModule(nn.Module, CameraConfig):
         params = [
             # name, value, lr
             # ("means3d", self.means3d, self.lr_means3d),
-            ("quat", self.quaternion_cur, self.quat_lr),
-            ("trans", self.translation_cur, self.trans_lr),
+            ("quat", self.quaternion_cur, self.config.quat_lr),
+            ("trans", self.translation_cur, self.config.trans_lr),
         ]
         optimizers = [
             Adam(
@@ -186,7 +122,9 @@ class CameraOptModule(nn.Module, CameraConfig):
                     }
                 ],
                 weight_decay=(
-                    self.quat_opt_reg if name == "quat" else self.trans_opt_reg
+                    self.config.quat_opt_reg
+                    if name == "quat"
+                    else self.config.trans_opt_reg
                 ),
             )
             for name, param, lr in params
@@ -194,44 +132,150 @@ class CameraOptModule(nn.Module, CameraConfig):
         return optimizers
 
 
-@dataclass
+# NOTE: 6d + tans
+class CameraOptModule_6d_tans(nn.Module):
+    def __init__(self, init_pose: Tensor, *, config: CameraConfig = CameraConfig()):
+        super().__init__()
+        self.config = config
+        self.c2w_start = init_pose
+        self.rotation_6d = nn.Parameter(matrix_to_rotation_6d(init_pose[:3, :3]))
+        self.translation_cur = nn.Parameter(init_pose[:3, 3])
+        self.optimizers = self._create_optimizers()
+
+    def forward(self, points: Tensor) -> tuple[Tensor, Tensor]:
+        """
+
+        Parameters
+        ----------
+        points: src point ,N,3
+
+        Returns
+        -------
+            tuple[new_points,cur_c2w]
+        """
+        cur_rotation = rotation_6d_to_matrix(self.rotation_6d)
+        cur_c2w = construct_full_pose(cur_rotation, self.translation_cur)
+        transform_matrix = cur_c2w @ torch.linalg.inv(self.c2w_start)
+        new_points = kornia.geometry.transform_points(
+            transform_matrix.unsqueeze(0), points
+        )
+        return new_points, cur_c2w
+
+    def _create_optimizers(self) -> list[Optimizer]:
+        params = [
+            # name, value, lr
+            ("rot_6d", self.rotation_6d, self.config.quat_lr),
+            ("trans", self.translation_cur, self.config.trans_lr),
+        ]
+        optimizers = [
+            Adam(
+                [
+                    {
+                        "params": param,
+                        "lr": lr,
+                        "name": name,
+                    }
+                ],
+                weight_decay=(
+                    self.config.quat_opt_reg
+                    if name == "quat"
+                    else self.config.trans_opt_reg
+                ),
+            )
+            for name, param, lr in params
+        ]
+        return optimizers
+
+
+# NOTE: 6d_inc, tans_inc
+class CameraOptModule_6d_inc_tans_inc(nn.Module):
+    def __init__(
+        self, init_pose: torch.Tensor, *, config: CameraConfig = CameraConfig()
+    ):
+        super().__init__()
+        self.config = config
+        self.c2w_start = init_pose
+
+        # Identity rotation in 6D representation
+        self.register_buffer(
+            "identity_rotation_6d", torch.tensor([1.0, 0.0, 0.0, 0.0, 1.0, 0.0])
+        )
+
+        # Initialize increments as zeros
+        self.rotation_6d_inc = nn.Parameter(torch.zeros(6))
+        self.translation_inc = nn.Parameter(torch.zeros(3))
+        self.optimizers = self._create_optimizers()
+
+    def forward(self, points: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        # Adjust rotation increment by the identity rotation
+        adjusted_rotation_6d = self.rotation_6d_inc + self.identity_rotation_6d
+        rot_inc_matrix = rotation_6d_to_matrix(adjusted_rotation_6d)
+
+        # Apply increments to initial pose
+        init_rotation = self.c2w_start[:3, :3]
+        init_translation = self.c2w_start[:3, 3]
+
+        cur_rotation = rot_inc_matrix @ init_rotation
+        cur_translation = init_translation + self.translation_inc
+
+        cur_c2w = construct_full_pose(cur_rotation, cur_translation)
+        transform_matrix = cur_c2w @ torch.linalg.inv(self.c2w_start)
+
+        new_points = kornia.geometry.transform_points(
+            transform_matrix.unsqueeze(0), points
+        )
+        return new_points, cur_c2w
+
+    def _create_optimizers(self) -> list[Optimizer]:
+        params = [
+            # name, value, lr
+            ("rot_6d", self.rotation_6d_inc, self.config.quat_lr),
+            ("trans", self.translation_inc, self.config.trans_lr),
+        ]
+        optimizers = [
+            Adam(
+                [
+                    {
+                        "params": param,
+                        "lr": lr,
+                        "name": name,
+                    }
+                ],
+                weight_decay=(
+                    self.config.quat_opt_reg
+                    if name == "quat"
+                    else self.config.trans_opt_reg
+                ),
+            )
+            for name, param, lr in params
+        ]
+        return optimizers
+
+
+@dataclass(frozen=True)
 class GsConfig:
-    ssim_lambda: float = 0.2
     init_opa: float = 1.0
-    prune_opa: float = 0.005
-    grow_grad2d: float = 0.0002
-    grow_scale3d: float = 0.01
-    prune_scale3d: float = 0.1
     sparse_grad: bool = False
     packed: bool = False
     absgrad: bool = False
     antialiased: bool = False
-    random_bkgd: bool = False
     # Degree of spherical harmonics
     sh_degree: int = 3
-    # Turn on another SH degree every this steps
-    sh_degree_interval: int = 1000
-
-    ssim: StructuralSimilarityIndexMeasure = None
-    psnr: PeakSignalNoiseRatio = None
-    lpips: LearnedPerceptualImagePatchSimilarity = None
-
-    def init_loss(self):
-        self.ssim = StructuralSimilarityIndexMeasure(data_range=1.0).to(DEVICE)
-        self.psnr = PeakSignalNoiseRatio(data_range=1.0).to(DEVICE)
-        self.lpips = LearnedPerceptualImagePatchSimilarity(normalize=True).to(DEVICE)
 
 
-class GSModel(nn.Module, GsConfig):
+class GSModel(nn.Module):
     def __init__(
         self,
         # dataset
         gs_data: AlignData,
+        *,
         # config
+        config: GsConfig = GsConfig(),
         batch_size: int = 1,
         feature_dim: int | None = None,
     ):
         super().__init__()
+        self.config = config
         self.batch_size = batch_size
         points = gs_data.points
         rgbs = gs_data.colors
@@ -247,7 +291,9 @@ class GSModel(nn.Module, GsConfig):
         # self.means3d = nn.Parameter(points)  # [N, 3]
         self.scales = nn.Parameter(scales)
         self.opacities = nn.Parameter(
-            torch.logit(torch.full((points.shape[0],), self.init_opa, device=DEVICE))
+            torch.logit(
+                torch.full((points.shape[0],), self.config.init_opa, device=DEVICE)
+            )
         )  # [N,]
         # NOTE: no deformation
         self.quats = torch.nn.Parameter(
@@ -258,7 +304,7 @@ class GSModel(nn.Module, GsConfig):
         if feature_dim is None:
             # color is SH coefficients.
             colors = torch.zeros(
-                (points.shape[0], (self.sh_degree + 1) ** 2, 3), device=DEVICE
+                (points.shape[0], (self.config.sh_degree + 1) ** 2, 3), device=DEVICE
             )  # [N, K, 3]
             colors[:, 0, :] = rgb_to_sh(rgbs)  # Initialize SH coefficients
             self.colors = nn.Parameter(colors)
@@ -309,10 +355,10 @@ class GSModel(nn.Module, GsConfig):
             Ks=Ks,
             width=width,
             height=height,
-            packed=self.packed,
-            absgrad=self.absgrad,
-            sparse_grad=self.sparse_grad,
-            rasterize_mode="antialiased" if self.antialiased else "classic",
+            packed=self.config.packed,
+            absgrad=self.config.absgrad,
+            sparse_grad=self.config.sparse_grad,
+            rasterize_mode="antialiased" if self.config.antialiased else "classic",
             **kwargs,
         )
 
@@ -335,7 +381,7 @@ class GSModel(nn.Module, GsConfig):
         params.append(("colors", self.colors, self.lr_colors))
 
         optimizers = [
-            (SparseAdam if self.sparse_grad else Adam)(
+            (SparseAdam if self.config.sparse_grad else Adam)(
                 [
                     {
                         "params": param,
@@ -359,13 +405,13 @@ class GSModel(nn.Module, GsConfig):
         """Update running stats."""
 
         # normalize grads to [-1, 1] screen space
-        if self.absgrad:
+        if self.config.absgrad:
             grads = info["means2d"].absgrad.clone()
         else:
             grads = info["means2d"].grad.clone()
         grads[..., 0] *= info["width"] / 2.0 * self.batch_size
         grads[..., 1] *= info["height"] / 2.0 * self.batch_size
-        if self.packed:
+        if self.config.packed:
             # grads is [nnz, 2]
             gs_ids = info["gaussian_ids"]  # [nnz] or None
             self.running_stats["grad2d"].index_add_(0, gs_ids, grads.norm(dim=-1))
@@ -520,7 +566,7 @@ class GSModel(nn.Module, GsConfig):
             Ks=K[None],
             width=W,
             height=H,
-            sh_degree=self.sh_degree,  # active all SH degrees
+            sh_degree=self.config.sh_degree,  # active all SH degrees
             # radius_clip=3.0,  # skip GSs that have small image radius (in pixels)
         )  # [1, H, W, 3]
         return render_colors[0].cpu().numpy()

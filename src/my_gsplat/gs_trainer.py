@@ -17,7 +17,12 @@ from src.my_gsplat.datasets.normalize import transform_points
 
 from .datasets.base import Config
 from .datasets.dataset import AlignData, Parser
-from .model import CameraOptModule, GSModel
+from .model import (
+    GSModel,
+    CameraOptModule_quat_tans,
+    CameraOptModule_6d_tans,
+    CameraOptModule_6d_inc_tans_inc,
+)
 from .utils import (
     DEVICE,
     CustomEncoder,
@@ -33,7 +38,7 @@ class Runner(Config):
 
     def __init__(
         self,
-        logger: WandbLogger | None = None,
+        logger: WandbLogger,
     ) -> None:
         super().__init__()
         set_random_seed(42)
@@ -43,7 +48,7 @@ class Runner(Config):
         # Tensorboard
         self.writer = SummaryWriter(log_dir=f"{self.result_dir}/tb")
 
-        self.logger = logger
+        self.logger: WandbLogger = logger
 
         # load data
         self.parser = Parser()
@@ -63,12 +68,15 @@ class Runner(Config):
 
             max_steps = self.max_steps
             # models, optimizers and schedulers
-            gs_splats = GSModel(train_data)
+            gs_splats = GSModel(train_data).to(DEVICE)
             print("Model initialized. Number of GS:", len(gs_splats))
             cur_c2w = train_data.tar_c2w  # 4, 4
             c2w_gt = train_data.src_c2w
-            camera_opt = CameraOptModule(train_data.tar_c2w)
-
+            camera_opt = CameraOptModule_6d_inc_tans_inc(train_data.tar_c2w).to(DEVICE)
+            # camera_opt = CameraOptModule_6d_tans(train_data.tar_c2w).to(DEVICE)
+            # camera_opt = CameraOptModule_quat_tans(train_data.tar_c2w).to(DEVICE)
+            # self.logger.log_gradients(camera_opt, idx=0)
+            # self.logger.log_gradients(gs_splats, idx=0)
             schedulers = [
                 # means3d has a learning rate schedule, that end at 0.01 of the initial value
                 # torch.optim.lr_scheduler.ExponentialLR(
@@ -198,13 +206,9 @@ class Runner(Config):
                         step=step,
                     )
                     # self.logger.log_LR(
-                    #     model=camera_opt,
+                    #     model=gs_splats,
                     #     schedulers=schedulers,
                     #     step=step,
-                    # )
-                    # gradients
-                    self.logger.log_gradients(camera_opt, step=step)
-                    self.logger.log_gradients(gs_splats, step=step)
 
                     # IMAGE
                     if step % 10 == 0:
@@ -357,6 +361,7 @@ class Runner(Config):
                     self.viewer.state.num_train_rays_per_sec = num_train_rays_per_sec
                     # Update the scene.
                     self.viewer.update(step, num_train_rays_per_step)
+            self.logger.finish()
 
     @torch.no_grad()
     def eval(self, gs_splats: GSModel, c2w: Tensor, step: int):

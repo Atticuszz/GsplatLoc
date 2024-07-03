@@ -91,7 +91,7 @@ class OptimizationConfig:
     psnr: PeakSignalNoiseRatio = None
     lpips: LearnedPerceptualImagePatchSimilarity = None
 
-    early_stop: bool = False
+    early_stop: bool = True
     patience = 200
     best_eR = float("inf")
     best_eT = float("inf")
