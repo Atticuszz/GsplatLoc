@@ -1,8 +1,22 @@
 # CHANGELOG
 
+## v0.6.2 (2024-07-03)
+
+### Chore
+
+* chore: added wandb logger to monitor training loss ([`521b051`](https://github.com/Atticuszz/AB_GICP/commit/521b051308d5d42b3ba5a4af8c018dfc2f2d968f))
+
+* chore: add early stop for train ([`15c3290`](https://github.com/Atticuszz/AB_GICP/commit/15c329064c7d749f64289f1ff73d3a10cc4d4f34))
+
+### Fix
+
+* fix: failed to show lr in wandb ([`378825d`](https://github.com/Atticuszz/AB_GICP/commit/378825d5e049e70897587fd82204afef68d401d4))
+
 ## v0.6.1 (2024-07-01)
 
 ### Chore
+
+* chore(release): bump version to v0.6.1 ([`6800491`](https://github.com/Atticuszz/AB_GICP/commit/68004914b0c922877c13f435b4adabf559941b90))
 
 * chore: add cameraopt nn.module class ([`4f3f11c`](https://github.com/Atticuszz/AB_GICP/commit/4f3f11c6625df74bae282a2013a48310aecacbab))
 
