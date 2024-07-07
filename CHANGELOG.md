@@ -1,8 +1,20 @@
 # CHANGELOG
 
+## v0.6.3 (2024-07-07)
+
+### Chore
+
+* chore: add different camera model.py ([`b51b89a`](https://github.com/Atticuszz/AB_GICP/commit/b51b89a377dc073754bb8d1d5bd29f8b6735de1a))
+
+### Fix
+
+* fix: several bugs of training ([`f80cca8`](https://github.com/Atticuszz/AB_GICP/commit/f80cca86eb007831ec898043ce1eaf402f3332a5))
+
 ## v0.6.2 (2024-07-03)
 
 ### Chore
+
+* chore(release): bump version to v0.6.2 ([`b6027d0`](https://github.com/Atticuszz/AB_GICP/commit/b6027d00b6f862fe5aeb5bfc91353f8d150b801a))
 
 * chore: added wandb logger to monitor training loss ([`521b051`](https://github.com/Atticuszz/AB_GICP/commit/521b051308d5d42b3ba5a4af8c018dfc2f2d968f))
 
