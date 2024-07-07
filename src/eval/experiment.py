@@ -1,17 +1,8 @@
 import pprint
 from typing import Literal, NamedTuple
 
-import numpy as np
-
 # from src.component import Scan2ScanICP
 from src.eval.logger import WandbLogger
-from src.eval.utils import (
-    calculate_pointcloud_rmse,
-    calculate_rotation_error,
-    calculate_translation_error,
-    diff_pcd_COM,
-)
-from src.my_gsplat.datasets.dataset import DataLoaderBase, Replica, RGBDImage
 
 # from src.pose_estimation.train_eval import train_model_with_adam, train_model_with_LBFGS
 
@@ -34,6 +25,7 @@ class WandbConfig(NamedTuple):
     dataset: str = "Replica"
     sub_set: str = "office0"
     description: str = "GICP on Replica dataset"
+    normalize: bool = True
     implementation: str | None = None
     num_iters: int | None = None
     learning_rate: float | None = None
@@ -45,17 +37,21 @@ class WandbConfig(NamedTuple):
 
 class ExperimentBase:
 
-    def __init__(self, backends, wandb_config: WandbConfig, extra_config: dict = None):
-        self.data: DataLoaderBase = Replica(wandb_config.sub_set)
+    def __init__(
+        self, wandb_config: WandbConfig, extra_config: dict = None, backends=None
+    ):
+        # self.data: DataLoaderBase = Replica(wandb_config.sub_set)
+        self.sub_set = wandb_config.sub_set
         self.backends = backends
         if extra_config is None:
             extra_config = {}
         wandb_config = wandb_config.as_dict()
         wandb_config.update(**extra_config)
         pprint.pprint(wandb_config)
+
         self.logger = WandbLogger(config=wandb_config)
 
-    def run(self, max_images: int = 2000):
+    def run(self):
         raise NotImplementedError
 
 

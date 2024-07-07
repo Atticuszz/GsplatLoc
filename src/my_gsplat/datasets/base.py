@@ -2,8 +2,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import torch
 from nerfview import Viewer
-from numpy.typing import NDArray
 from torch import Tensor
 from torchmetrics.image import (
     LearnedPerceptualImagePatchSimilarity,
@@ -12,9 +12,7 @@ from torchmetrics.image import (
 )
 from viser import ViserServer
 
-
 from ..utils import DEVICE
-from .Image import RGBDImage
 
 
 @dataclass
@@ -31,16 +29,6 @@ class DatasetConfig:
     stats_dir: Path | None = None
     render_dir: Path | None = None
     ckpt_dir: Path | None = None
-
-    # load_data
-    # parser: Parser | None = None
-    trainset: list[RGBDImage] | None = None
-    # valset: Dataset | None = None
-    scene_scale: float | None = None
-
-    # extra
-    pcd: NDArray | None = None  # N,3
-    color: NDArray | None = None  # N,3
 
     def make_dir(self):
         # Where to dump results.
@@ -71,7 +59,7 @@ class TrainingConfig:
 
 @dataclass
 class OptimizationConfig:
-    ssim_lambda: float = 0.2
+    ssim_lambda: float = 0.5
     init_opa: float = 0.1
     prune_opa: float = 0.005
     grow_grad2d: float = 0.0002
@@ -92,23 +80,16 @@ class OptimizationConfig:
     lpips: LearnedPerceptualImagePatchSimilarity = None
 
     early_stop: bool = True
-    patience = 200
+    patience = 800
     best_eR = float("inf")
     best_eT = float("inf")
+    best_loss = float("inf")
     counter = 0
 
     def init_loss(self):
         self.ssim = StructuralSimilarityIndexMeasure(data_range=1.0).to(DEVICE)
         self.psnr = PeakSignalNoiseRatio(data_range=1.0).to(DEVICE)
         self.lpips = LearnedPerceptualImagePatchSimilarity(normalize=True).to(DEVICE)
-
-
-@dataclass
-class RasterizeConfig:
-    # Near plane clipping distance
-    near_plane: float = 0.01
-    # Far plane clipping distance
-    far_plane: float = 1e10
 
 
 @dataclass
@@ -127,7 +108,7 @@ class DepthLossConfig:
 
 @dataclass
 class ViewerConfig:
-    disable_viewer: bool = False
+    disable_viewer: bool = True
     port: int = 8080
 
     # init view
@@ -145,12 +126,6 @@ class ViewerConfig:
 
 
 @dataclass
-class TensorboardConfig:
-    tb_every: int = 100
-    tb_save_image: bool = False
-
-
-@dataclass
 class Config(
     TrainingConfig,
     DatasetConfig,
@@ -158,8 +133,6 @@ class Config(
     AppearanceConfig,
     DepthLossConfig,
     ViewerConfig,
-    TensorboardConfig,
-    RasterizeConfig,
 ):
     ckpt: str | None = None
 
@@ -175,11 +148,39 @@ class Config(
 
 
 @dataclass
-class AlignData:
+class TensorWrapper:
+    def to(self, device: torch.device) -> "TensorWrapper":
+        """
+        Move all Tensor attributes to the specified device.
+        """
+        for attr_name, attr_value in self.__dict__.items():
+            if torch.is_tensor(attr_value):
+                setattr(self, attr_name, attr_value.to(device))
+        return self
+
+    def enable_gradients(self) -> "TensorWrapper":
+        """
+        Enable gradients for all Tensor attributes of the TrainData instance.
+        """
+        for attr_name, attr_value in self.__dict__.items():
+            if torch.is_tensor(attr_value):
+                setattr(self, attr_name, attr_value.requires_grad_())
+        return self
+
+    def __post_init__(self):
+        """
+        Ensure all tensors are on the same device after initialization.
+        """
+        self.to(DEVICE)
+        self.enable_gradients()
+
+
+@dataclass
+class AlignData(TensorWrapper):
     """normed data"""
 
     # for GS
-    scene_scale: float
+
     colors: Tensor  # N,3
     pixels: Tensor  # H,W,3
     points: Tensor  # N,3
@@ -189,3 +190,18 @@ class AlignData:
     tar_c2w: Tensor  # 4,4
     src_c2w: Tensor  # 4,4
     tar_nums: int  # for slice tar and src
+    scene_scale: float = 1.0
+
+
+@dataclass
+class TrainData(TensorWrapper):
+    """normed data"""
+
+    # for GS
+    scene_scale: float
+    colors: Tensor  # N,3
+    pixels: Tensor  # H,W,3
+    # in camera
+    points: Tensor  # N,3
+    depth: Tensor  # H,w
+    c2w: Tensor  # 4,4

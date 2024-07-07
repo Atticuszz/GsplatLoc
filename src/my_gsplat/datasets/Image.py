@@ -35,11 +35,11 @@ class RGBDImage:
             raise ValueError(
                 "RGB's height and width must match Depth's height and width."
             )
-        self._rgb = to_tensor(rgb, device=DEVICE, requires_grad=True)
-        self._depth = to_tensor(depth / depth_scale, device=DEVICE, requires_grad=True)
-        self._K = to_tensor(K, device=DEVICE, requires_grad=True)
+        self._rgb = to_tensor(rgb, device=DEVICE)
+        self._depth = to_tensor(depth / depth_scale, device=DEVICE)
+        self._K = to_tensor(K, device=DEVICE)
 
-        self._pose = to_tensor(pose, device=DEVICE, requires_grad=True)
+        self._pose = to_tensor(pose, device=DEVICE)
         self._pcd = self._project_pcds(include_homogeneous=False)
 
     @property
@@ -153,7 +153,7 @@ class RGBDImage:
         points = torch.stack((x, y, z), dim=-1)  # shape (h, w, 3)
 
         if include_homogeneous:
-            ones = torch.ones((h, w, 1), device=DEVICE)
+            ones = torch.ones((h, w, 1), requires_grad=True, device=DEVICE)
             points = torch.cat((points, ones), dim=-1)  # shape (h, w, 4)
 
         # Flatten the points to shape (h*w, 3) or (h*w, 4)

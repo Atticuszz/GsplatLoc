@@ -127,52 +127,55 @@ def compute_silhouette_diff(depth: Tensor, rastered_depth: Tensor) -> Tensor:
     return silhouette_diff
 
 
-def generate_depth_map(
-    points: Tensor, c2w: Tensor, K: Tensor, image_size: tuple
-) -> Tensor:
+def add_background_and_penalize_depth(
+    image: Tensor,
+    depth: Tensor,
+    alphas: Tensor,
+    background_color: Tensor = torch.tensor([1.0, 1.0, 1.0], device=DEVICE),
+):
     """
-    Generate a depth map from normalized point cloud.
+    对透明区域添加背景色，并对深度为0的区域施加高惩罚。
 
-    Parameters:
-    - points (torch.Tensor): The normalized 3D point cloud, shape (N, 3).
-    - c2w (torch.Tensor): The camera-to-world transformation matrix, shape (4, 4).
-    - K (torch.Tensor): The intrinsic camera matrix, shape (3, 3).
-    - image_size (tuple): The dimensions of the target image (height, width).
+    参数:
+    - image: 彩色图像，形状为 [B, H, W, C]。
+    - depth: 深度图，形状为 [B, H, W, 1]。
+    - alphas: 透明度图，形状为 [B, H, W, 1]。
+    - background_color: 背景颜色，形状为 [C]。
+    - depth_penalty: 深度为0的区域的高惩罚值。
 
-    Returns:
-    - torch.Tensor: The generated depth map, shape (image_size[0], image_size[1]).
+    返回:
+    - updated_image: 更新后的彩色图像。
+    - updated_depth: 更新后的深度图。
     """
-    # Invert c2w to get world-to-camera transformation
-    w2c = torch.linalg.inv(c2w)
-
-    # Transform points from world to camera coordinates
-    points_hom = torch.cat(
-        (
-            points,
-            torch.ones(points.size(0), 1, dtype=points.dtype, device=points.device),
-        ),
-        dim=1,
+    depth_penalty = torch.max(depth).item()
+    background_color = background_color.view(1, 1, 1, -1).expand_as(image)
+    transparent_mask = alphas == 0
+    zero_depth_mask = depth == 0
+    updated_image = torch.where(
+        transparent_mask.expand_as(image), background_color, image
     )
-    points_cam = torch.mm(points_hom, w2c.t())[:, :3]
+    updated_depth = torch.where(
+        zero_depth_mask, torch.full_like(depth, depth_penalty), depth
+    )
+    return updated_image, updated_depth
 
-    # Project points onto the image plane
-    projected = torch.mm(points_cam, K.t())
-    projected[:, :2] /= projected[:, 2].unsqueeze(1)  # Normalize x, y by z (depth)
 
-    # Initialize depth map with zeros
-    depth_map = torch.zeros(image_size, dtype=torch.float32, device=points.device)
+def transform_points(matrix: torch.Tensor, points: torch.Tensor) -> torch.Tensor:
+    """
+    Transform points using a SE(3) transformation matrix.
 
-    # Convert projected points into discrete image coordinates
-    x = projected[:, 0].long()
-    y = projected[:, 1].long()
+    Parameters
+    ----------
+    matrix : torch.Tensor
+        A 4x4 SE(3) transformation matrix.
+    points : torch.Tensor
+        An Nx3 tensor of points to be transformed.
 
-    # Filter points within the image bounds
-    mask = (x >= 0) & (x < image_size[1]) & (y >= 0) & (y < image_size[0])
-    x = x[mask]
-    y = y[mask]
-    depth_values = points_cam[:, 2][mask]
-
-    # Fill depth map
-    depth_map[y, x] = depth_values
-
-    return depth_map
+    Returns
+    -------
+    torch.Tensor
+        An Nx3 tensor of transformed points.
+    """
+    assert matrix.shape == (4, 4)
+    assert len(points.shape) == 2 and points.shape[1] == 3
+    return torch.addmm(matrix[:3, 3], points, matrix[:3, :3].t())

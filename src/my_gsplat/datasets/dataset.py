@@ -5,10 +5,11 @@ import numpy as np
 import torch
 from natsort import natsorted
 
+from ..geometry import transform_points
 from ..utils import as_intrinsics_matrix, load_camera_cfg, to_tensor
 from .base import AlignData
 from .Image import RGBDImage
-from .normalize import normalize_2, scene_scale
+from .normalize import normalize_2C
 
 
 class DataLoaderBase:
@@ -142,10 +143,11 @@ class Replica(DataLoaderBase):
 
 
 class Parser(Replica):
-
-    def __init__(self):
-        super().__init__()
-        self.K = to_tensor(self.K)
+    def __init__(self, name: str = "room0", normalize: bool = False):
+        super().__init__(name=name)
+        self.K = to_tensor(self.K, requires_grad=True)
+        # normalize points and pose
+        self.normalize = normalize
 
     def __len__(self) -> int:
         return super().__len__() - 1
@@ -153,25 +155,27 @@ class Parser(Replica):
     def __getitem__(self, index: int) -> AlignData:
         assert index < len(self)
         tar, src = super().__getitem__(index), super().__getitem__(index + 1)
-        tar_normed, src_normed = normalize_2(tar, src)
-        scene_scale_normed = scene_scale([tar_normed, src_normed])
-
-        # test
-        points = torch.cat([tar_normed.points, src_normed.points], dim=0)  # N,3
-        rgbs = torch.stack(
-            [tar_normed.color / 255.0, src_normed.color / 255.0], dim=0
-        ).reshape(
+        # transform to world
+        tar.points = transform_points(tar.pose, tar.points)
+        src.points = transform_points(tar.pose, src.points)
+        if self.normalize:
+            tar, src = normalize_2C(tar, src)
+        # scene_scale_normed = scene_scale([tar_normed, src_normed])
+        # combined
+        points = torch.cat([tar.points, src.points], dim=0)  # N,3
+        rgbs = torch.stack([tar.color / 255.0, src.color / 255.0], dim=0).reshape(
             -1, 3
         )  # N,3
+
         return AlignData(
-            scene_scale_normed,
-            rgbs,
-            src_normed.color,
-            points,
-            tar_normed.points,
-            src_normed.points,
-            src_normed.depth,
-            tar_c2w=tar_normed.pose,
-            src_c2w=src_normed.pose,
-            tar_nums=tar_normed.points.shape[0],
+            # scene_scale=scene_scale_normed,
+            colors=rgbs,
+            pixels=src.color / 255.0,
+            points=points,
+            tar_points=tar.points,
+            src_points=src.points,
+            src_depth=src.depth,  # NOTE: depth need to be normalized
+            tar_c2w=tar.pose,
+            src_c2w=src.pose,
+            tar_nums=tar.points.shape[0],
         )

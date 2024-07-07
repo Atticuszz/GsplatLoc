@@ -1,13 +1,12 @@
 from datetime import datetime
+from typing import Literal
 
 import torch
 from matplotlib import pyplot as plt
 from torch import Tensor
 
 import wandb
-from torch.optim import Optimizer
-
-from src.my_gsplat.geometry import compute_silhouette_diff
+from ..my_gsplat.geometry import compute_silhouette_diff
 
 
 class WandbLogger:
@@ -26,6 +25,7 @@ class WandbLogger:
             name=run_name,
             config=config,
         )
+
         print(f"Run name: {run_name}:config: {config}")
 
     def log_translation_error(self, eT: float, step: int):
@@ -52,7 +52,6 @@ class WandbLogger:
         """
         wandb.log({"COM Difference": com_diff}, step=step)
 
-    # BUG: failed to show in wandb
     def log_LR(self, model: torch.nn.Module, schedulers: list, step: int):
         """
         Log the learning rates of all optimizers and their scheduler types.
@@ -69,23 +68,15 @@ class WandbLogger:
                 wandb.log({l_name: lr}, step=step)
 
     # BUG: failed to show in wandb
-    def log_gradients(self, model: torch.nn.Module, step: int):
-        """
-        Log the gradients of model parameters as histograms.
-        :param model: The model whose gradients you want to log
-        :param step: Current step number
-        """
-        gradients = {}
-        for i, optimizer in enumerate(model.optimizers):
-            for j, param_group in enumerate(optimizer.param_groups):
-                for k, param in enumerate(param_group["params"]):
-                    if param.grad is not None:
-                        name = f"optimizer_{i}_group_{j}_param_{k}"
-                        gradients[f"{model.__class__.__name__}'s gradients/{name}"] = (
-                            wandb.Histogram(param.grad.cpu().numpy())
-                        )
-
-        wandb.log(gradients, step=step)
+    def log_gradients(
+        self,
+        model: torch.nn.Module,
+        idx: int,
+        log: Literal["gradients", "parameters", "all"] | None = "gradients",
+        log_graph: bool = True,
+    ):
+        """https://docs.wandb.ai/ref/python/watch"""
+        wandb.watch(model, log=log, log_graph=log_graph, idx=idx, log_freq=1)
 
     def log_iter_times(self, iter_times: int, step: int):
         """

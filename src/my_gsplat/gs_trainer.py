@@ -1,5 +1,4 @@
 import json
-import math
 import time
 from timeit import default_timer
 
@@ -9,196 +8,252 @@ import torch
 import torch.nn.functional as F
 import tqdm
 from torch import Tensor
-from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingLR
-from torch.utils.tensorboard import SummaryWriter
 
-from src.eval.logger import WandbLogger
+from src.eval.experiment import ExperimentBase, WandbConfig
 from src.my_gsplat.datasets.normalize import transform_points
 
 from .datasets.base import Config
 from .datasets.dataset import AlignData, Parser
+from .loss import compute_silhouette_loss
 from .model import (
-    GSModel,
-    CameraOptModule_quat_tans,
-    CameraOptModule_6d_tans,
     CameraOptModule_6d_inc_tans_inc,
+    CameraOptModule_6d_tans,
+    CameraOptModule_quat_tans,
+    GSModel,
 )
 from .utils import (
     DEVICE,
-    CustomEncoder,
-    set_random_seed,
-    to_tensor,
-    calculate_translation_error,
     calculate_rotation_error,
+    calculate_translation_error,
+    set_random_seed,
 )
 
 
-class Runner(Config):
+class Runner(ExperimentBase):
     """Engine for training and testing."""
 
     def __init__(
         self,
-        logger: WandbLogger,
+        wandb_config: WandbConfig,
+        base_config: Config = Config(),
+        extra_config: dict = None,
     ) -> None:
-        super().__init__()
+        super().__init__(wandb_config=wandb_config, extra_config=extra_config)
         set_random_seed(42)
         # Setup output directories.
-        self.make_dir()
 
-        # Tensorboard
-        self.writer = SummaryWriter(log_dir=f"{self.result_dir}/tb")
-
-        self.logger: WandbLogger = logger
-
+        self.config = base_config
+        self.config.make_dir()
         # load data
-        self.parser = Parser()
+        self.parser = Parser(self.sub_set, normalize=wandb_config.normalize)
 
+        cam_opt_dict = {
+            "quat": CameraOptModule_quat_tans,
+            "6d": CameraOptModule_6d_tans,
+            "6d+": CameraOptModule_6d_inc_tans_inc,
+        }
+        self.camera_opt_module = cam_opt_dict[extra_config["cam_opt"]]
         # Losses & Metrics.
-        self.init_loss()
+        self.config.init_loss()
 
     def train(self):
-
+        # torch.autograd.set_detect_anomaly(True)
         # Dump self.
-        with open(f"{self.res_dir.as_posix()}/self.json", "w") as f:
-            json.dump(vars(self), f, cls=CustomEncoder)
+        # with open(f"{self.config.res_dir.as_posix()}/self.json", "w") as f:
+        #     json.dump(vars(self), f, cls=CustomEncoder)
 
-        for i, train_data in enumerate([self.parser[728]]):
+        for i, train_data in enumerate([self.parser[924]]):
             # NOTE: train data loop
             train_data: AlignData
+            height, width = train_data.pixels.shape[:2]
+            Ks = self.parser.K.unsqueeze(0)  # [1, 3, 3]
 
-            max_steps = self.max_steps
-            # models, optimizers and schedulers
-            gs_splats = GSModel(train_data).to(DEVICE)
-            print("Model initialized. Number of GS:", len(gs_splats))
-            cur_c2w = train_data.tar_c2w  # 4, 4
-            c2w_gt = train_data.src_c2w
-            camera_opt = CameraOptModule_6d_inc_tans_inc(train_data.tar_c2w).to(DEVICE)
-            # camera_opt = CameraOptModule_6d_tans(train_data.tar_c2w).to(DEVICE)
-            # camera_opt = CameraOptModule_quat_tans(train_data.tar_c2w).to(DEVICE)
-            # self.logger.log_gradients(camera_opt, idx=0)
-            # self.logger.log_gradients(gs_splats, idx=0)
+            max_steps = self.config.max_steps
+            # NOTE: Models init with tar.points
+            gs_splats = GSModel(
+                train_data.tar_points, train_data.colors[: train_data.tar_nums]
+            ).to(DEVICE)
+            # NOTE: un-project to get depth_gt for normed src_pcd
+            src_points_cam = transform_points(
+                torch.linalg.inv(train_data.tar_c2w),
+                train_data.points[train_data.tar_nums :],
+            )
+            if self.parser.normalize:
+                unproject_depth = GSModel(
+                    src_points_cam,
+                    train_data.colors[train_data.tar_nums :],
+                )
+                unprojected, _, _ = unproject_depth(
+                    camtoworlds=torch.eye(4, device=DEVICE).unsqueeze(0),  # [1, 4, 4],
+                    Ks=Ks,
+                    width=width,
+                    height=height,
+                    # sh_degree=sh_degree_to_use,
+                )
+                if unprojected.shape[-1] == 4:
+                    _, depths_gt = unprojected[..., 0:3], unprojected[..., 3:4]
+                else:
+                    _, depths_gt = unprojected, None
+            else:
+                depths_gt = train_data.src_depth.unsqueeze(-1).unsqueeze(0)
+
+            # camera init with tar.pose
+            camera_opt = self.camera_opt_module(train_data.tar_c2w).to(DEVICE)
+
             schedulers = [
-                # means3d has a learning rate schedule, that end at 0.01 of the initial value
-                # torch.optim.lr_scheduler.ExponentialLR(
-                #     gs_splats.optimizers[0], gamma=0.01 ** (1.0 / max_steps)
-                # ),
                 torch.optim.lr_scheduler.ExponentialLR(
                     camera_opt.optimizers[0], gamma=0.2 ** (1.0 / max_steps)
                 ),
                 torch.optim.lr_scheduler.ExponentialLR(
                     camera_opt.optimizers[1], gamma=0.2 ** (1.0 / max_steps)
                 ),
-                # CosineAnnealingLR(
-                #     camera_opt.optimizers[0], T_max=max_steps, eta_min=1e-3 + 3 * 1e-4
-                # ),
-                # CosineAnnealingLR(
-                #     camera_opt.optimizers[1], T_max=max_steps, eta_min=1e-3 + 3 * 1e-4
-                # ),
             ]
 
             # nerf viewer
-            if not self.disable_viewer:
-                self.init_view(gs_splats.viewer_render_fn)
+            if not self.config.disable_viewer:
+                self.config.init_view(gs_splats.viewer_render_fn)
             init_step = 0
             pbar = tqdm.tqdm(range(init_step, max_steps))
             for step in pbar:
                 # NOTE: Training loop.
                 global_tic = default_timer()
-
-                if not self.disable_viewer:
-                    while self.viewer.state.status == "paused":
+                if not self.config.disable_viewer:
+                    while self.config.viewer.state.status == "paused":
                         time.sleep(0.01)
-                    self.viewer.lock.acquire()
+                    self.config.viewer.lock.acquire()
                     tic = default_timer()
-                # with torch.autograd.detect_anomaly():
+
                 # NOTE: start forward
-
-                Ks = self.parser.K.unsqueeze(0)  # [1, 3, 3]
-
-                pixels = train_data.pixels.unsqueeze(0) / 255.0  # [1, H, W, 3]
-
+                pixels = train_data.pixels.unsqueeze(0)  # [1, H, W, 3]
                 num_train_rays_per_step = (
                     pixels.shape[0] * pixels.shape[1] * pixels.shape[2]
                 )
-                image_ids = to_tensor([i], device=DEVICE, dtype=torch.int32)
-                height, width = pixels.shape[1:3]
-
-                # sh schedule
-                sh_degree_to_use = min(step // self.sh_degree_interval, self.sh_degree)
-
-                # BUG: c2w update wrong
+                # # # sh schedule
+                # sh_degree_to_use = min(step // self.sh_degree_interval, self.sh_degree)
                 # NOTE: apply c2w to src_gs
-                transformed_points, cur_c2w = camera_opt(train_data.src_points)
-                gs_splats.means3d = torch.cat(
-                    [train_data.tar_points, transformed_points], dim=0
-                )
-
+                # transformed_points, cur_c2w = camera_opt(train_data.src_points)
+                cur_c2w = camera_opt()
+                # gs_splats.means3d = torch.cat(
+                #     [train_data.tar_points, transformed_points], dim=0
+                # )
                 # NOTE: gs forward
                 renders, alphas, info = gs_splats(
-                    camtoworlds=cur_c2w.unsqueeze(0),
-                    Ks=Ks,
+                    camtoworlds=cur_c2w.unsqueeze(0),  # [1, 3, 3],
+                    Ks=Ks,  # [1, 3, 3],
                     width=width,
                     height=height,
-                    sh_degree=sh_degree_to_use,
-                    near_plane=self.near_plane,
-                    far_plane=self.far_plane,
-                    image_ids=image_ids,
-                    render_mode="RGB+ED" if self.depth_loss else "RGB",
+                    # sh_degree=sh_degree_to_use,
                 )
+
                 if renders.shape[-1] == 4:
                     colors, depths = renders[..., 0:3], renders[..., 3:4]
                 else:
                     colors, depths = renders, None
-
                 info["means2d"].retain_grad()  # used for running stats
-
                 # NOTE:loss
-                l1loss = F.l1_loss(colors, pixels)
-                ssimloss = 1.0 - self.ssim(
-                    pixels.permute(0, 3, 1, 2), colors.permute(0, 3, 1, 2)
-                )
-                loss = (
-                    l1loss * (1.0 - self.ssim_lambda) + ssimloss * self.ssim_lambda
-                ) * (1 - self.depth_lambda)
-                assert torch.is_tensor(depths)
-                depth_loss = (
-                    F.l1_loss(depths, train_data.src_depth.unsqueeze(0).unsqueeze(-1))
-                    * train_data.scene_scale
-                )
-                loss += depth_loss * self.depth_lambda
-                loss.backward()
+                # avoid nan area
+                non_zero_depth_mask = (depths != 0).float()
 
-                # NOTE: monitor the pose error if we inject noise
-                eT = calculate_translation_error(
-                    cur_c2w.squeeze(-1).squeeze(0), c2w_gt.squeeze(-1).squeeze(0)
+                # RGB L1 Loss
+                l1loss = F.l1_loss(
+                    colors * non_zero_depth_mask,
+                    pixels * non_zero_depth_mask,
+                    reduction="sum",
+                ) / (non_zero_depth_mask.sum() + 1e-8)
+
+                # SSIM Loss
+                ssim_value = self.config.ssim(
+                    (pixels * non_zero_depth_mask).permute(0, 3, 1, 2),
+                    (colors * non_zero_depth_mask).permute(0, 3, 1, 2),
+                )
+                ssimloss = 1.0 - ssim_value
+
+                # Combined RGB Loss
+                rgb_loss = (
+                    l1loss * (1.0 - self.config.ssim_lambda)
+                    + ssimloss * self.config.ssim_lambda
+                ) * (1 - 1)
+
+                # Depth Loss
+                depth_loss = F.l1_loss(
+                    depths * non_zero_depth_mask,
+                    depths_gt * non_zero_depth_mask,
+                    reduction="sum",
+                ) / (non_zero_depth_mask.sum() + 1e-8)
+                depth_loss *= train_data.scene_scale
+
+                # Silhouette Loss
+                silhouette_loss = compute_silhouette_loss(
+                    (
+                        depths.squeeze(-1).squeeze(0)
+                        * non_zero_depth_mask.squeeze(-1).squeeze(0)
+                    ),
+                    (
+                        depths_gt.squeeze(-1).squeeze(0)
+                        * non_zero_depth_mask.squeeze(-1).squeeze(0)
+                    ),
+                    loss_type="l1",
                 )
 
-                eR = calculate_rotation_error(
-                    cur_c2w.squeeze(-1).squeeze(0), c2w_gt.squeeze(-1).squeeze(0)
+                # Total Loss
+                total_loss = (
+                    rgb_loss
+                    + depth_loss * self.config.depth_lambda
+                    + silhouette_loss * (1 - self.config.depth_lambda)
                 )
 
-                if self.logger is not None:
+                total_loss.backward(retain_graph=True)
+                # NOTE: logger
+                with torch.no_grad():
                     # loss
-                    self.logger.log_loss("total_loss", loss.item(), step=step)
-                    self.logger.log_loss(
-                        "pixels", l1loss.item(), step=step, l_type="l1"
-                    )
-                    self.logger.log_loss(
-                        "pixels", ssimloss.item(), step=step, l_type="ssim"
-                    )
-                    self.logger.log_loss(
-                        "depth", depth_loss.item(), step=step, l_type="l1"
-                    )
-                    self.logger.log_loss(
-                        "depth", depth_loss.item(), step=step, l_type="l1"
-                    )
+                    self.logger.log_loss("total_loss", total_loss.item(), step=step)
                     # self.logger.log_loss(
-                    #     "silhouette_loss_mse", silhouette_loss.item(), step=step
+                    #     "pixels", l1loss.item(), step=step, l_type="l1"
                     # )
+                    # self.logger.log_loss(
+                    #     "pixels", ssimloss.item(), step=step, l_type="ssim"
+                    # )
+                    self.logger.log_loss(
+                        "depth", depth_loss.item(), step=step, l_type="l1"
+                    )
+                    self.logger.log_loss(
+                        "silhouette_loss",
+                        silhouette_loss.item(),
+                        step=step,
+                        l_type="l1",
+                    )
+                    # IMAGE
+                    if step % 50 == 0:
+                        self.logger.plot_rgbd(
+                            depths_gt.squeeze(-1).squeeze(0),
+                            depths.squeeze(-1).squeeze(0),
+                            # combined_projected_depth,
+                            {
+                                "type": "l1",
+                                "value": depth_loss.item(),
+                            },
+                            color=train_data.pixels,
+                            rastered_color=colors.squeeze(0),
+                            color_loss={
+                                "type": "pixels_l1",
+                                "value": l1loss.item(),
+                            },
+                            step=step,
+                            fig_title="gs_splats Visualization",
+                        )
+                    # NOTE: monitor the pose error
+                    eT = calculate_translation_error(
+                        cur_c2w.squeeze(-1).squeeze(0),
+                        train_data.src_c2w.squeeze(-1).squeeze(0),
+                    )
+
+                    eR = calculate_rotation_error(
+                        cur_c2w.squeeze(-1).squeeze(0),
+                        train_data.src_c2w.squeeze(-1).squeeze(0),
+                    )
                     # Error
                     self.logger.log_translation_error(eT, step=step)
                     self.logger.log_rotation_error(eR, step=step)
-
                     # LR
                     self.logger.log_LR(
                         model=camera_opt,
@@ -207,116 +262,121 @@ class Runner(Config):
                     )
                     # self.logger.log_LR(
                     #     model=gs_splats,
-                    #     schedulers=schedulers,
+                    #     schedulers=schedulers[2:],
                     #     step=step,
+                    # )
 
-                    # IMAGE
-                    if step % 10 == 0:
-                        self.logger.plot_rgbd(
-                            depths.squeeze(-1).squeeze(0),
-                            train_data.src_depth,
-                            # combined_projected_depth,
-                            {
-                                "type": "l1",
-                                "value": depth_loss.item(),
-                            },
-                            color=train_data.pixels / 255.0,
-                            rastered_color=colors.squeeze(0),
-                            color_loss={"type": "pixels_l1", "value": l1loss.item()},
-                            step=step,
-                            fig_title="gs_splats Visualization",
-                        )
+                    # NOTE: early stop
+                    desc = f"loss={total_loss.item():.8f}|"
+
+                    pbar.set_description(desc)
+                    if self.config.early_stop:
+
+                        if eR < self.config.best_eR and eT < self.config.best_eT:
+                            self.config.best_eR = eR
+                            self.config.best_eT = eT
+                            self.config.counter = 0  # 重置计数器
+                        else:
+                            self.config.counter += 1
+                        desc += f"best_eR:{self.config.best_eR}| best_eT: {self.config.best_eT}|"
+                        if self.config.counter >= self.config.patience:
+                            desc += f"\nEarly stopping triggered at step {step}|"
+                            pbar.set_description(desc)
+                            self.config.counter = 0
+                            break
 
                 # NOTE: early stop
-                desc = f"loss={loss.item():.8f}|"
-                desc += f"best_eR:{self.best_eR}| best_eT: {self.best_eT}|"
+                desc = f"loss={total_loss.item():.8f}|"
+                desc += (
+                    f"best_eR:{self.config.best_eR}| best_eT: {self.config.best_eT}|"
+                )
                 pbar.set_description(desc)
-                if self.early_stop:
-                    if eR < self.best_eR and eT < self.best_eT:
-                        self.best_eR = eR
-                        self.best_eT = eT
-                        self.counter = 0  # 重置计数器
+                if self.config.early_stop:
+                    if eR < self.config.best_eR and eT < self.config.best_eT:
+                        self.config.best_eR = eR
+                        self.config.best_eT = eT
+                        self.config.counter = 0  # 重置计数器
                     else:
-                        self.counter += 1
-                    if self.counter >= self.patience:
+                        self.config.counter += 1
+                    if self.config.counter >= self.config.patience:
                         desc += f"\nEarly stopping triggered at step {step}|"
                         pbar.set_description(desc)
-                        self.counter = 0
+                        self.config.counter = 0
                         break
 
-                # NOTE: update running stats for prunning & growing
-                if step < self.refine_stop_iter:
-                    gs_splats.update_running_stats(info)
-
-                    if step > self.refine_start_iter and step % self.refine_every == 0:
-                        grads = gs_splats.running_stats[
-                            "grad2d"
-                        ] / gs_splats.running_stats["count"].clamp_min(1)
-
-                        # grow GSs
-                        is_grad_high = grads >= self.grow_grad2d
-                        is_small = (
-                            torch.exp(gs_splats.scales).max(dim=-1).values
-                            <= self.grow_scale3d * train_data.scene_scale
-                        )
-                        is_dupli = is_grad_high & is_small
-                        n_dupli = is_dupli.sum().item()
-                        gs_splats.refine_duplicate(is_dupli)
-
-                        is_split = is_grad_high & ~is_small
-                        is_split = torch.cat(
-                            [
-                                is_split,
-                                # new GSs added by duplication will not be split
-                                torch.zeros(n_dupli, device=DEVICE, dtype=torch.bool),
-                            ]
-                        )
-                        n_split = is_split.sum().item()
-                        gs_splats.refine_split(is_split)
-                        print(
-                            f"Step {step}: {n_dupli} GSs duplicated, {n_split} GSs split. "
-                            f"Now having {len(gs_splats)} GSs."
-                        )
-
-                        # prune GSs
-                        is_prune = torch.sigmoid(gs_splats.opacities) < self.prune_opa
-                        if step > self.reset_every:
-                            # The official code also implements sreen-size pruning but
-                            # it's actually not being used due to a bug:
-                            # https://github.com/graphdeco-inria/gaussian-splatting/issues/123
-                            is_too_big = (
-                                torch.exp(gs_splats.scales).max(dim=-1).values
-                                > self.prune_scale3d * self.scene_scale
-                            )
-                            is_prune = is_prune | is_too_big
-                        n_prune = is_prune.sum().item()
-                        gs_splats.refine_keep(~is_prune)
-                        print(
-                            f"Step {step}: {n_prune} GSs pruned. "
-                            f"Now having {len(gs_splats)} GSs."
-                        )
-
-                        # reset running stats
-                        gs_splats.running_stats["grad2d"].zero_()
-                        gs_splats.running_stats["count"].zero_()
-
-                    if step % self.reset_every == 0:
-                        gs_splats.reset_opa(self.prune_opa * 2.0)
-
-                # Turn Gradients into Sparse Tensor before running optimizer
-                if self.sparse_grad:
-                    assert self.packed, "Sparse gradients only work with packed mode."
-                    gaussian_ids = info["gaussian_ids"]
-                    for k in gs_splats.keys():
-                        grad = gs_splats[k].grad
-                        if grad is None or grad.is_sparse:
-                            continue
-                        gs_splats[k].grad = torch.sparse_coo_tensor(
-                            indices=gaussian_ids[None],  # [1, nnz]
-                            values=grad[gaussian_ids],  # [nnz, ...]
-                            size=gs_splats[k].size(),  # [N, ...]
-                            is_coalesced=len(Ks) == 1,
-                        )
+                # # NOTE: update running stats for prunning & growing
+                # if step < self.refine_stop_iter:
+                #     gs_splats.update_running_stats(info)
+                #
+                #     if step > self.refine_start_iter and step % self.refine_every == 0:
+                #         grads = gs_splats.running_stats[
+                #             "grad2d"
+                #         ] / gs_splats.running_stats["count"].clamp_min(1)
+                #
+                #         # grow GSs
+                #         is_grad_high = grads >= self.grow_grad2d
+                #         is_small = (
+                #             torch.exp(gs_splats.scales).max(dim=-1).values
+                #             <= self.grow_scale3d * train_data.scene_scale
+                #         )
+                #         is_dupli = is_grad_high & is_small
+                #         n_dupli = is_dupli.sum().item()
+                #         gs_splats.refine_duplicate(is_dupli)
+                #
+                #         is_split = is_grad_high & ~is_small
+                #         is_split = torch.cat(
+                #             [
+                #                 is_split,
+                #                 # new GSs added by duplication will not be split
+                #                 torch.zeros(n_dupli, device=DEVICE, dtype=torch.bool),
+                #             ]
+                #         )
+                #         n_split = is_split.sum().item()
+                #         gs_splats.refine_split(is_split)
+                #         print(
+                #             f"Step {step}: {n_dupli} GSs duplicated, {n_split} GSs split. "
+                #             f"Now having {len(gs_splats)} GSs."
+                #         )
+                #
+                #         # prune GSs
+                #         is_prune = torch.sigmoid(gs_splats.opacities) < self.prune_opa
+                #         if step > self.reset_every:
+                #             # The official code also implements sreen-size pruning but
+                #             # it's actually not being used due to a bug:
+                #             # https://github.com/graphdeco-inria/gaussian-splatting/issues/123
+                #             is_too_big = (
+                #                 torch.exp(gs_splats.scales).max(dim=-1).values
+                #                 > self.prune_scale3d * self.scene_scale
+                #             )
+                #             is_prune = is_prune | is_too_big
+                #         n_prune = is_prune.sum().item()
+                #         gs_splats.refine_keep(~is_prune)
+                #         print(
+                #             f"Step {step}: {n_prune} GSs pruned. "
+                #             f"Now having {len(gs_splats)} GSs."
+                #         )
+                #
+                #         # reset running stats
+                #         gs_splats.running_stats["grad2d"].zero_()
+                #         gs_splats.running_stats["count"].zero_()
+                #
+                #     if step % self.reset_every == 0:
+                #         gs_splats.reset_opa(self.prune_opa * 2.0)
+                #
+                # # Turn Gradients into Sparse Tensor before running optimizer
+                # if self.sparse_grad:
+                #     assert self.packed, "Sparse gradients only work with packed mode."
+                #     gaussian_ids = info["gaussian_ids"]
+                #     for k in gs_splats.keys():
+                #         grad = gs_splats[k].grad
+                #         if grad is None or grad.is_sparse:
+                #             continue
+                #         gs_splats[k].grad = torch.sparse_coo_tensor(
+                #             indices=gaussian_ids[None],  # [1, nnz]
+                #             values=grad[gaussian_ids],  # [nnz, ...]
+                #             size=gs_splats[k].size(),  # [N, ...]
+                #             is_coalesced=len(Ks) == 1,
+                #         )
 
                 # optimize
                 # for optimizer in gs_splats.optimizers:
@@ -328,39 +388,41 @@ class Runner(Config):
                 for scheduler in schedulers:
                     scheduler.step()
 
-                # save checkpoint
-                if step in [i - 1 for i in self.save_steps] or step == max_steps - 1:
-                    mem = torch.cuda.max_memory_allocated() / 1024**3
-                    stats = {
-                        "mem": mem,
-                        "ellipse_time": time.time() - global_tic,
-                        "num_GS": len(gs_splats),
-                    }
-                    print("Step: ", step, stats)
-                    with open(f"{self.stats_dir}/train_step{step:04d}.json", "w") as f:
-                        json.dump(stats, f)
-                    torch.save(
-                        {
-                            "step": step,
-                            "splats": gs_splats.state_dict(),
-                        },
-                        f"{self.ckpt_dir}/ckpt_{step}.pt",
-                    )
+                # # save checkpoint
+                # if step in [i - 1 for i in self.save_steps] or step == max_steps - 1:
+                #     mem = torch.cuda.max_memory_allocated() / 1024**3
+                #     stats = {
+                #         "mem": mem,
+                #         "ellipse_time": time.time() - global_tic,
+                #         "num_GS": len(gs_splats),
+                #     }
+                #     print("Step: ", step, stats)
+                #     with open(f"{self.stats_dir}/train_step{step:04d}.json", "w") as f:
+                #         json.dump(stats, f)
+                #     torch.save(
+                #         {
+                #             "step": step,
+                #             "splats": gs_splats.state_dict(),
+                #         },
+                #         f"{self.ckpt_dir}/ckpt_{step}.pt",
+                #     )
 
-                if step in [i - 1 for i in self.eval_steps] or step == max_steps - 1:
-                    self.eval(gs_splats, cur_c2w, step)
+                # if step in [i - 1 for i in self.eval_steps] or step == max_steps - 1:
+                #     self.eval(gs_splats, cur_c2w, step)
 
                 # viewer
-                if not self.disable_viewer:
-                    self.viewer.lock.release()
+                if not self.config.disable_viewer:
+                    self.config.viewer.lock.release()
                     num_train_steps_per_sec = 1.0 / (time.time() - tic)
                     num_train_rays_per_sec = (
                         num_train_rays_per_step * num_train_steps_per_sec
                     )
                     # Update the viewer state.
-                    self.viewer.state.num_train_rays_per_sec = num_train_rays_per_sec
+                    self.config.viewer.state.num_train_rays_per_sec = (
+                        num_train_rays_per_sec
+                    )
                     # Update the scene.
-                    self.viewer.update(step, num_train_rays_per_step)
+                    self.config.viewer.update(step, num_train_rays_per_step)
             self.logger.finish()
 
     @torch.no_grad()
@@ -426,26 +488,3 @@ class Runner(Config):
         for k, v in stats.items():
             self.writer.add_scalar(f"val/{k}", v, step)
         self.writer.flush()
-
-
-def main():
-    runner = Runner()
-    runner.adjust_steps()
-    if runner.ckpt is not None:
-        # run eval only
-        ckpt = torch.load(runner.ckpt, map_location=DEVICE)
-        for k in runner.splats.keys():
-            runner.splats[k].data = ckpt["splats"][k]
-        runner.eval(step=ckpt["step"])
-        runner.render_traj(step=ckpt["step"])
-    else:
-        runner.train()
-
-    if not runner.disable_viewer:
-        print("Viewer running... Ctrl+C to exit.")
-        time.sleep(1000000)
-
-
-if __name__ == "__main__":
-    torch.autograd.set_detect_anomaly(True)
-    main()
