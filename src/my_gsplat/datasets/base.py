@@ -80,7 +80,7 @@ class OptimizationConfig:
     lpips: LearnedPerceptualImagePatchSimilarity = None
 
     early_stop: bool = True
-    patience = 800
+    patience = 20
     best_eR = float("inf")
     best_eT = float("inf")
     best_loss = float("inf")

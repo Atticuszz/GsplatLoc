@@ -58,6 +58,7 @@ class Runner(ExperimentBase):
 
     def train(self):
         # torch.autograd.set_detect_anomaly(True)
+        torch.set_float32_matmul_precision("high")
         # Dump self.
         # with open(f"{self.config.res_dir.as_posix()}/self.json", "w") as f:
         #     json.dump(vars(self), f, cls=CustomEncoder)
@@ -196,10 +197,8 @@ class Runner(ExperimentBase):
                 )
 
                 # Total Loss
-                total_loss = (
-                    rgb_loss
-                    + depth_loss * self.config.depth_lambda
-                    + silhouette_loss * (1 - self.config.depth_lambda)
+                total_loss = depth_loss * self.config.depth_lambda + silhouette_loss * (
+                    1 - self.config.depth_lambda
                 )
 
                 total_loss.backward(retain_graph=True)
@@ -207,12 +206,12 @@ class Runner(ExperimentBase):
                 with torch.no_grad():
                     # loss
                     self.logger.log_loss("total_loss", total_loss.item(), step=step)
-                    # self.logger.log_loss(
-                    #     "pixels", l1loss.item(), step=step, l_type="l1"
-                    # )
-                    # self.logger.log_loss(
-                    #     "pixels", ssimloss.item(), step=step, l_type="ssim"
-                    # )
+                    self.logger.log_loss(
+                        "pixels", l1loss.item(), step=step, l_type="l1"
+                    )
+                    self.logger.log_loss(
+                        "pixels", ssimloss.item(), step=step, l_type="ssim"
+                    )
                     self.logger.log_loss(
                         "depth", depth_loss.item(), step=step, l_type="l1"
                     )
@@ -268,41 +267,28 @@ class Runner(ExperimentBase):
 
                     # NOTE: early stop
                     desc = f"loss={total_loss.item():.8f}|"
-
                     pbar.set_description(desc)
                     if self.config.early_stop:
-
-                        if eR < self.config.best_eR and eT < self.config.best_eT:
-                            self.config.best_eR = eR
+                        # if eR < self.config.best_eR and eT < self.config.best_eT:
+                        #     self.config.best_eR = eR
+                        #     self.config.best_eT = eT
+                        #     self.config.counter = 0  # 重置计数器
+                        # else:
+                        #     self.config.counter += 1
+                        if depth_loss.item() < self.config.best_loss:
+                            self.config.best_loss = depth_loss.item()
                             self.config.best_eT = eT
-                            self.config.counter = 0  # 重置计数器
+                            self.config.best_eR = eR
+                            self.config.counter = 0
                         else:
                             self.config.counter += 1
                         desc += f"best_eR:{self.config.best_eR}| best_eT: {self.config.best_eT}|"
+                        pbar.set_description(desc)
                         if self.config.counter >= self.config.patience:
                             desc += f"\nEarly stopping triggered at step {step}|"
-                            pbar.set_description(desc)
                             self.config.counter = 0
+                            pbar.set_description(desc)
                             break
-
-                # NOTE: early stop
-                desc = f"loss={total_loss.item():.8f}|"
-                desc += (
-                    f"best_eR:{self.config.best_eR}| best_eT: {self.config.best_eT}|"
-                )
-                pbar.set_description(desc)
-                if self.config.early_stop:
-                    if eR < self.config.best_eR and eT < self.config.best_eT:
-                        self.config.best_eR = eR
-                        self.config.best_eT = eT
-                        self.config.counter = 0  # 重置计数器
-                    else:
-                        self.config.counter += 1
-                    if self.config.counter >= self.config.patience:
-                        desc += f"\nEarly stopping triggered at step {step}|"
-                        pbar.set_description(desc)
-                        self.config.counter = 0
-                        break
 
                 # # NOTE: update running stats for prunning & growing
                 # if step < self.refine_stop_iter:

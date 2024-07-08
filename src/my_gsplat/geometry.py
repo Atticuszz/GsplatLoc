@@ -7,17 +7,19 @@ from torch import Tensor
 from .utils import DEVICE
 
 
+@torch.compile
 def construct_full_pose(rotation: Tensor, translation: Tensor):
     """
     Constructs the full 4x4 transformation matrix from rotation and translation.
     Ensures that gradients are tracked for rotation and translation.
     """
-    pose = torch.eye(4, dtype=rotation.dtype, device=DEVICE)
+    pose = torch.eye(4, dtype=rotation.dtype, device="cuda:0")
     pose[:3, :3] = rotation
     pose[:3, 3] = translation
     return pose
 
 
+@torch.compile
 def rotation_matrix_to_quaternion(rotation_matrix: Tensor) -> Tensor:
     """
     Convert a rotation matrix to a quaternion.
@@ -35,6 +37,7 @@ def rotation_matrix_to_quaternion(rotation_matrix: Tensor) -> Tensor:
     return KG.rotation_matrix_to_quaternion(rotation_matrix)
 
 
+@torch.compile
 def rotation_6d_to_matrix(d6: Tensor) -> Tensor:
     """
     Converts 6D rotation representation by Zhou et al. [1] to rotation matrix
@@ -59,6 +62,7 @@ def rotation_6d_to_matrix(d6: Tensor) -> Tensor:
     return torch.stack((b1, b2, b3), dim=-2)
 
 
+@torch.compile
 def matrix_to_rotation_6d(matrix: torch.Tensor) -> torch.Tensor:
     """
     Converts rotation matrices to 6D rotation representation by Zhou et al. [1]
@@ -78,7 +82,8 @@ def matrix_to_rotation_6d(matrix: torch.Tensor) -> torch.Tensor:
     return matrix[..., :2, :].clone().reshape(batch_dim + (6,))
 
 
-def quaternion_to_rotation_matrix(quaternion: Tensor) -> Tensor:
+@torch.compile
+def quat_to_rotation_matrix(quaternion: Tensor) -> Tensor:
     """
     Convert a quaternion to a rotation matrix.
 
@@ -97,6 +102,7 @@ def quaternion_to_rotation_matrix(quaternion: Tensor) -> Tensor:
     return KG.quaternion_to_rotation_matrix(normalized_quaternion)
 
 
+@torch.compile
 def compute_silhouette_diff(depth: Tensor, rastered_depth: Tensor) -> Tensor:
     """
     Compute the difference between the sobel edges of two depth images.
@@ -160,6 +166,7 @@ def add_background_and_penalize_depth(
     return updated_image, updated_depth
 
 
+@torch.compile
 def transform_points(matrix: torch.Tensor, points: torch.Tensor) -> torch.Tensor:
     """
     Transform points using a SE(3) transformation matrix.

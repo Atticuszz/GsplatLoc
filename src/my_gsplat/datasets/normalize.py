@@ -3,6 +3,7 @@ import torch
 from .Image import RGBDImage
 
 
+@torch.compile
 @torch.no_grad()
 def similarity_from_cameras(
     c2w: torch.Tensor, strict_scaling: bool = False, center_method: str = "focus"
@@ -81,6 +82,7 @@ def similarity_from_cameras(
     return transform
 
 
+@torch.compile
 @torch.no_grad()
 def align_principle_axes(point_cloud: torch.Tensor) -> torch.Tensor:
     """
@@ -127,6 +129,7 @@ def align_principle_axes(point_cloud: torch.Tensor) -> torch.Tensor:
     return transform
 
 
+@torch.compile
 @torch.no_grad()
 def transform_points(matrix: torch.Tensor, points: torch.Tensor) -> torch.Tensor:
     """
@@ -149,6 +152,7 @@ def transform_points(matrix: torch.Tensor, points: torch.Tensor) -> torch.Tensor
     return torch.addmm(matrix[:3, 3], points, matrix[:3, :3].t())
 
 
+@torch.compile
 @torch.no_grad()
 def transform_cameras(matrix: torch.Tensor, c2w: torch.Tensor) -> torch.Tensor:
     """
@@ -212,36 +216,22 @@ def normalize_dataset_slice(dataset_slice: list[RGBDImage]) -> list[RGBDImage]:
     return dataset_slice
 
 
+@torch.compile
 @torch.no_grad()
-def normalize_2(tar: RGBDImage, src: RGBDImage) -> tuple[RGBDImage, RGBDImage]:
-    """normalize two rgb image with tar pose"""
+def normalize_2C(tar: RGBDImage, src: RGBDImage) -> tuple[RGBDImage, RGBDImage]:
+    """normalize two rgb-d image with tar.pose"""
+    pose = tar.pose.unsqueeze(0)  # -> N,4,4
+    # calculate tar points normalization transform
+    points = tar.points
+    T1 = similarity_from_cameras(pose)
+    T2 = align_principle_axes(transform_points(T1, points))
+    transform = T2 @ T1
 
-    # combine as one scene
-    poses = torch.stack([tar.pose, src.pose], dim=0)
-    # NOTE: transform to world,init with first pose
-    points = torch.cat(
-        [
-            transform_points(tar.pose, tar.points),
-            transform_points(tar.pose, src.points),
-        ],
-        dim=0,
-    )
-    # normalize
-    T1 = similarity_from_cameras(poses)
-    poses = transform_cameras(T1, poses)
-    points = transform_points(T1, points)
-
-    T2 = align_principle_axes(points)
-    poses = transform_cameras(T2, poses)
-    points = transform_points(T2, points)
-
-    # transform = T2 @ T1
-
-    # Update the original data with normalized values
-    num_points = len(tar.points)
-    tar.points, src.points = points[:num_points], points[num_points:]
-    tar.pose, src.pose = poses[0], poses[1]
-
+    # apply transform
+    tar.points = transform_points(transform, tar.points)
+    src.points = transform_points(transform, src.points)
+    tar.pose = transform_cameras(transform, tar.pose.unsqueeze(0)).squeeze(0)
+    src.pose = transform_cameras(transform, src.pose.unsqueeze(0)).squeeze(0)
     return tar, src
 
 
