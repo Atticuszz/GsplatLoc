@@ -1,8 +1,20 @@
 # CHANGELOG
 
+## v0.6.4 (2024-07-14)
+
+### Chore
+
+* chore: add torch.compile and try to add early stop method ([`994a961`](https://github.com/Atticuszz/AB_GICP/commit/994a961b81dce52d268aeffa9aebad25f74a1b8c))
+
+### Fix
+
+* fix: normalize scale for depth and simplify compute depth_gt in Parser ([`ebff011`](https://github.com/Atticuszz/AB_GICP/commit/ebff0118781afddb7372c54acbdcf7d45f2198cd))
+
 ## v0.6.3 (2024-07-07)
 
 ### Chore
+
+* chore(release): bump version to v0.6.3 ([`bb7f324`](https://github.com/Atticuszz/AB_GICP/commit/bb7f324964c87ad15bda3f2c03ff1325fca9f4bd))
 
 * chore: add different camera model.py ([`b51b89a`](https://github.com/Atticuszz/AB_GICP/commit/b51b89a377dc073754bb8d1d5bd29f8b6735de1a))
 
