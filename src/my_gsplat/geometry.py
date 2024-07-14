@@ -2,12 +2,13 @@ import kornia
 import kornia.geometry as KG
 import torch
 import torch.nn.functional as F
+from gsplat import rasterization
 from torch import Tensor
 
-from .utils import DEVICE
+from .utils import DEVICE, knn, rgb_to_sh, to_tensor
 
 
-@torch.compile
+# @torch.compile
 def construct_full_pose(rotation: Tensor, translation: Tensor):
     """
     Constructs the full 4x4 transformation matrix from rotation and translation.
@@ -19,7 +20,7 @@ def construct_full_pose(rotation: Tensor, translation: Tensor):
     return pose
 
 
-@torch.compile
+# @torch.compile
 def rotation_matrix_to_quaternion(rotation_matrix: Tensor) -> Tensor:
     """
     Convert a rotation matrix to a quaternion.
@@ -37,7 +38,7 @@ def rotation_matrix_to_quaternion(rotation_matrix: Tensor) -> Tensor:
     return KG.rotation_matrix_to_quaternion(rotation_matrix)
 
 
-@torch.compile
+# @torch.compile
 def rotation_6d_to_matrix(d6: Tensor) -> Tensor:
     """
     Converts 6D rotation representation by Zhou et al. [1] to rotation matrix
@@ -62,7 +63,7 @@ def rotation_6d_to_matrix(d6: Tensor) -> Tensor:
     return torch.stack((b1, b2, b3), dim=-2)
 
 
-@torch.compile
+# @torch.compile
 def matrix_to_rotation_6d(matrix: torch.Tensor) -> torch.Tensor:
     """
     Converts rotation matrices to 6D rotation representation by Zhou et al. [1]
@@ -82,7 +83,7 @@ def matrix_to_rotation_6d(matrix: torch.Tensor) -> torch.Tensor:
     return matrix[..., :2, :].clone().reshape(batch_dim + (6,))
 
 
-@torch.compile
+# @torch.compile
 def quat_to_rotation_matrix(quaternion: Tensor) -> Tensor:
     """
     Convert a quaternion to a rotation matrix.
@@ -102,7 +103,7 @@ def quat_to_rotation_matrix(quaternion: Tensor) -> Tensor:
     return KG.quaternion_to_rotation_matrix(normalized_quaternion)
 
 
-@torch.compile
+# @torch.compile
 def compute_silhouette_diff(depth: Tensor, rastered_depth: Tensor) -> Tensor:
     """
     Compute the difference between the sobel edges of two depth images.
@@ -166,7 +167,7 @@ def add_background_and_penalize_depth(
     return updated_image, updated_depth
 
 
-@torch.compile
+# @torch.compile
 def transform_points(matrix: torch.Tensor, points: torch.Tensor) -> torch.Tensor:
     """
     Transform points using a SE(3) transformation matrix.
@@ -186,3 +187,77 @@ def transform_points(matrix: torch.Tensor, points: torch.Tensor) -> torch.Tensor
     assert matrix.shape == (4, 4)
     assert len(points.shape) == 2 and points.shape[1] == 3
     return torch.addmm(matrix[:3, 3], points, matrix[:3, :3].t())
+
+
+@torch.no_grad()
+def compute_depth_gt(
+    points: Tensor,  # N,3
+    rgbs: Tensor,  # N,3
+    Ks: Tensor,
+    c2w: Tensor,
+    height: int,
+    width: int,
+) -> Tensor:
+    """
+
+    Parameters
+    ----------
+        rgbs: N,3
+        points: N,3
+        Ks: 1,3,3
+        c2w: 1,4,4
+        height: int
+        width: int
+
+    Returns
+    -------
+        depths: [height, width]
+    """
+    # Parameters
+    means3d = points  # [N, 3]
+    # self.means3d = nn.Parameter(points)  # [N, 3]
+    init_opa = 1.0
+    opacities = torch.logit(
+        torch.full((points.shape[0],), init_opa, device=points.device)
+    )  # [N,]
+    # NOTE: no deformation
+    # Calculate distances for initial scale
+    dist2_avg = (knn(points, 4)[:, 1:] ** 2).mean(dim=-1)
+    dist_avg = torch.sqrt(dist2_avg)
+    scales = torch.log(dist_avg).unsqueeze(-1).repeat(1, 3)
+    quats = to_tensor([1, 0, 0, 0], device=points.device).repeat(
+        points.shape[0], 1
+    )  # [N, 4]
+
+    # # color is SH coefficients.
+    sh_degree = 1
+    colors = torch.zeros(
+        (points.shape[0], (sh_degree + 1) ** 2, 3), device=DEVICE
+    )  # [N, K, 3]
+    colors[:, 0, :] = rgb_to_sh(rgbs)  # Initialize SH coefficients
+    sh0 = colors[:, :1, :]
+    shN = colors[:, 1:, :]
+    opacities = torch.sigmoid(opacities)
+    colors = torch.cat([sh0, shN], 1)
+    # colors = torch.sigmoid(self.colors)
+    scales = torch.exp(scales)
+
+    render_colors, _, _ = rasterization(
+        means=means3d,
+        quats=quats,
+        scales=scales,
+        opacities=opacities,
+        colors=colors,
+        sh_degree=sh_degree,
+        viewmats=torch.linalg.inv(c2w),
+        Ks=Ks,
+        width=width,
+        height=height,
+        far_plane=1e10,
+        near_plane=1e-10,
+        render_mode="ED",
+        rasterize_mode="classic",
+    )
+
+    depths = render_colors
+    return depths.squeeze(0).squeeze(-1)

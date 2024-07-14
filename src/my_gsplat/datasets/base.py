@@ -190,7 +190,7 @@ class AlignData(TensorWrapper):
     tar_c2w: Tensor  # 4,4
     src_c2w: Tensor  # 4,4
     tar_nums: int  # for slice tar and src
-    scene_scale: float = 1.0
+    scale_factor: Tensor  # for scale depth after rot normalized
 
 
 @dataclass

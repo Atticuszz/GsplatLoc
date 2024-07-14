@@ -1,6 +1,7 @@
 import math
 from dataclasses import dataclass
 
+import kornia
 import nerfview
 import torch
 import torch.nn.functional as F
@@ -11,7 +12,7 @@ from torch.optim import Adam, Optimizer, SparseAdam
 from .geometry import (
     construct_full_pose,
     matrix_to_rotation_6d,
-    quaternion_to_rotation_matrix,
+    quat_to_rotation_matrix,
     rotation_6d_to_matrix,
     rotation_matrix_to_quaternion,
 )
@@ -90,7 +91,7 @@ class CameraOptModule_quat_tans(nn.Module):
         -------
             tuple[new_points,cur_c2w]
         """
-        cur_rotation = quaternion_to_rotation_matrix(self.quaternion_cur)
+        cur_rotation = quat_to_rotation_matrix(self.quaternion_cur)
         cur_c2w = construct_full_pose(cur_rotation, self.translation_cur)
         # transform_matrix = cur_c2w @ torch.linalg.inv(self.c2w_start)
         # new_points = kornia.geometry.transform_points(
@@ -334,7 +335,14 @@ class GSModel(nn.Module):
     def __len__(self):
         return self.means3d.shape[0]
 
-    def forward(self, camtoworlds: Tensor, Ks: Tensor, width: int, height: int):
+    def forward(
+        self,
+        camtoworlds: Tensor,
+        Ks: Tensor,
+        width: int,
+        height: int,
+        render_mode: str = "RGB+ED",
+    ):
         assert self.means3d.shape[0] == self.opacities.shape[0]
         opacities = torch.sigmoid(self.opacities)
         colors = torch.cat([self.sh0, self.shN], 1)
@@ -357,7 +365,7 @@ class GSModel(nn.Module):
             sparse_grad=self.config.sparse_grad,
             far_plane=self.config.far_plane,
             near_plane=self.config.near_plane,
-            render_mode="RGB+ED",
+            render_mode=render_mode,
             rasterize_mode="antialiased" if self.config.antialiased else "classic",
         )
 
@@ -394,6 +402,86 @@ class GSModel(nn.Module):
         ]
 
         return optimizers
+
+    # NOTE: need test
+    def add_gaussians(
+        self,
+        color_image: Tensor,
+        depth_image: Tensor,
+        mask: Tensor,
+        camera_matrix: Tensor,
+        camera_pose: Tensor,
+    ):
+        """
+        添加新的高斯分布点。
+
+        参数:
+        color_image: tensor, shape (H, W, 3)
+        depth_image: tensor, shape (H, W)
+        mask: tensor, shape (H, W), 布尔值，True 表示需要添加新的高斯
+        camera_matrix: tensor, shape (3, 3)
+        camera_pose: tensor, shape (4, 4), 相机到世界坐标的变换矩阵
+        """
+        height, width = depth_image.shape
+
+        # 使用 Kornia 将深度图转换为 3D 点云
+        points_2d = kornia.create_meshgrid(
+            height, width, normalized_coordinates=False
+        ).to(depth_image.device)
+        points_3d = kornia.geometry.depth_to_3d(
+            depth_image.unsqueeze(0), camera_matrix.unsqueeze(0), points_2d
+        )
+
+        # 将点从相机坐标系转换到世界坐标系
+        points_3d_homogeneous = F.pad(points_3d.view(-1, 3), (0, 1), value=1)
+        world_coords = (camera_pose @ points_3d_homogeneous.T).T[:, :3]
+
+        # 应用 mask 和深度过滤
+        valid_mask = (depth_image.view(-1) > 0) & mask.view(-1)
+        new_points = world_coords[valid_mask]
+        new_colors = color_image.view(-1, 3)[valid_mask]
+
+        # 更新模型参数
+        n_new = new_points.shape[0]
+
+        self.means3d = torch.cat([self.means3d, new_points], dim=0)
+
+        new_scales = torch.log(torch.ones_like(new_points) * 0.01)
+        self.scales = nn.Parameter(torch.cat([self.scales, new_scales], dim=0))
+
+        new_opacities = torch.logit(
+            torch.full((n_new,), self.config.init_opa, device=self.means3d.device)
+        )
+        self.opacities = nn.Parameter(torch.cat([self.opacities, new_opacities], dim=0))
+
+        new_quats = torch.tensor([1, 0, 0, 0], device=self.means3d.device).repeat(
+            n_new, 1
+        )
+        self.quats = nn.Parameter(torch.cat([self.quats, new_quats], dim=0))
+
+        new_colors_sh = torch.zeros(
+            (n_new, (self.config.sh_degree + 1) ** 2, 3), device=self.means3d.device
+        )
+        new_colors_sh[:, 0, :] = rgb_to_sh(new_colors)  # 假设 rgb_to_sh 函数已定义
+        self.sh0 = nn.Parameter(torch.cat([self.sh0, new_colors_sh[:, :1, :]], dim=0))
+        self.shN = nn.Parameter(torch.cat([self.shN, new_colors_sh[:, 1:, :]], dim=0))
+
+        # 更新 running_stats
+        self.running_stats["grad2d"] = torch.cat(
+            [
+                self.running_stats["grad2d"],
+                torch.zeros(n_new, device=self.means3d.device),
+            ]
+        )
+        self.running_stats["count"] = torch.cat(
+            [
+                self.running_stats["count"],
+                torch.zeros(n_new, device=self.means3d.device, dtype=torch.int),
+            ]
+        )
+
+        # 更新优化器
+        self.optimizers = self._create_optimizers()
 
     @torch.no_grad()
     def update_running_stats(self, info: dict):

@@ -1,9 +1,10 @@
 import torch
+from torch import Tensor
 
 from .Image import RGBDImage
 
 
-@torch.compile
+# @torch.compile
 @torch.no_grad()
 def similarity_from_cameras(
     c2w: torch.Tensor, strict_scaling: bool = False, center_method: str = "focus"
@@ -82,7 +83,7 @@ def similarity_from_cameras(
     return transform
 
 
-@torch.compile
+# @torch.compile
 @torch.no_grad()
 def align_principle_axes(point_cloud: torch.Tensor) -> torch.Tensor:
     """
@@ -129,7 +130,7 @@ def align_principle_axes(point_cloud: torch.Tensor) -> torch.Tensor:
     return transform
 
 
-@torch.compile
+# @torch.compile
 @torch.no_grad()
 def transform_points(matrix: torch.Tensor, points: torch.Tensor) -> torch.Tensor:
     """
@@ -152,9 +153,11 @@ def transform_points(matrix: torch.Tensor, points: torch.Tensor) -> torch.Tensor
     return torch.addmm(matrix[:3, 3], points, matrix[:3, :3].t())
 
 
-@torch.compile
+# @torch.compile
 @torch.no_grad()
-def transform_cameras(matrix: torch.Tensor, c2w: torch.Tensor) -> torch.Tensor:
+def transform_cameras(
+    matrix: torch.Tensor, c2w: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Apply a SE(3) transformation to a set of camera-to-world matrices.
 
@@ -180,8 +183,7 @@ def transform_cameras(matrix: torch.Tensor, c2w: torch.Tensor) -> torch.Tensor:
     transformed[:, :3, :3] /= scaling.unsqueeze(
         -1
     )  # Unsqueeze to match the shape for broadcasting
-
-    return transformed
+    return transformed, scaling
 
 
 @torch.no_grad()
@@ -216,9 +218,9 @@ def normalize_dataset_slice(dataset_slice: list[RGBDImage]) -> list[RGBDImage]:
     return dataset_slice
 
 
-@torch.compile
+# @torch.compile
 @torch.no_grad()
-def normalize_2C(tar: RGBDImage, src: RGBDImage) -> tuple[RGBDImage, RGBDImage]:
+def normalize_2C(tar: RGBDImage, src: RGBDImage) -> tuple[RGBDImage, RGBDImage, Tensor]:
     """normalize two rgb-d image with tar.pose"""
     pose = tar.pose.unsqueeze(0)  # -> N,4,4
     # calculate tar points normalization transform
@@ -230,9 +232,11 @@ def normalize_2C(tar: RGBDImage, src: RGBDImage) -> tuple[RGBDImage, RGBDImage]:
     # apply transform
     tar.points = transform_points(transform, tar.points)
     src.points = transform_points(transform, src.points)
-    tar.pose = transform_cameras(transform, tar.pose.unsqueeze(0)).squeeze(0)
-    src.pose = transform_cameras(transform, src.pose.unsqueeze(0)).squeeze(0)
-    return tar, src
+    normed_tar_pose, _ = transform_cameras(transform, tar.pose.unsqueeze(0))
+    tar.pose = normed_tar_pose.squeeze(0)
+    normed_src_pose, scale_factor = transform_cameras(transform, src.pose.unsqueeze(0))
+    src.pose = normed_src_pose.squeeze(0)
+    return tar, src, scale_factor
 
 
 @torch.no_grad()

@@ -10,7 +10,6 @@ import tqdm
 from torch import Tensor
 
 from src.eval.experiment import ExperimentBase, WandbConfig
-from src.my_gsplat.datasets.normalize import transform_points
 
 from .datasets.base import Config
 from .datasets.dataset import AlignData, Parser
@@ -59,11 +58,8 @@ class Runner(ExperimentBase):
     def train(self):
         # torch.autograd.set_detect_anomaly(True)
         torch.set_float32_matmul_precision("high")
-        # Dump self.
-        # with open(f"{self.config.res_dir.as_posix()}/self.json", "w") as f:
-        #     json.dump(vars(self), f, cls=CustomEncoder)
 
-        for i, train_data in enumerate([self.parser[924]]):
+        for i, train_data in enumerate([self.parser[888]]):
             # NOTE: train data loop
             train_data: AlignData
             height, width = train_data.pixels.shape[:2]
@@ -74,29 +70,8 @@ class Runner(ExperimentBase):
             gs_splats = GSModel(
                 train_data.tar_points, train_data.colors[: train_data.tar_nums]
             ).to(DEVICE)
-            # NOTE: un-project to get depth_gt for normed src_pcd
-            src_points_cam = transform_points(
-                torch.linalg.inv(train_data.tar_c2w),
-                train_data.points[train_data.tar_nums :],
-            )
-            if self.parser.normalize:
-                unproject_depth = GSModel(
-                    src_points_cam,
-                    train_data.colors[train_data.tar_nums :],
-                )
-                unprojected, _, _ = unproject_depth(
-                    camtoworlds=torch.eye(4, device=DEVICE).unsqueeze(0),  # [1, 4, 4],
-                    Ks=Ks,
-                    width=width,
-                    height=height,
-                    # sh_degree=sh_degree_to_use,
-                )
-                if unprojected.shape[-1] == 4:
-                    _, depths_gt = unprojected[..., 0:3], unprojected[..., 3:4]
-                else:
-                    _, depths_gt = unprojected, None
-            else:
-                depths_gt = train_data.src_depth.unsqueeze(-1).unsqueeze(0)
+
+            depths_gt = train_data.src_depth.unsqueeze(-1).unsqueeze(0)
 
             # camera init with tar.pose
             camera_opt = self.camera_opt_module(train_data.tar_c2w).to(DEVICE)
@@ -129,27 +104,26 @@ class Runner(ExperimentBase):
                 num_train_rays_per_step = (
                     pixels.shape[0] * pixels.shape[1] * pixels.shape[2]
                 )
-                # # # sh schedule
-                # sh_degree_to_use = min(step // self.sh_degree_interval, self.sh_degree)
                 # NOTE: apply c2w to src_gs
-                # transformed_points, cur_c2w = camera_opt(train_data.src_points)
                 cur_c2w = camera_opt()
-                # gs_splats.means3d = torch.cat(
-                #     [train_data.tar_points, transformed_points], dim=0
-                # )
                 # NOTE: gs forward
                 renders, alphas, info = gs_splats(
                     camtoworlds=cur_c2w.unsqueeze(0),  # [1, 3, 3],
                     Ks=Ks,  # [1, 3, 3],
                     width=width,
                     height=height,
-                    # sh_degree=sh_degree_to_use,
                 )
 
                 if renders.shape[-1] == 4:
-                    colors, depths = renders[..., 0:3], renders[..., 3:4]
+                    colors, _depths = renders[..., 0:3], renders[..., 3:4]
                 else:
-                    colors, depths = renders, None
+                    colors, _depths = renders, None
+                # scale depth after normalized
+                if self.parser.normalize:
+                    depths = _depths / train_data.scale_factor
+                else:
+                    depths = _depths
+
                 info["means2d"].retain_grad()  # used for running stats
                 # NOTE:loss
                 # avoid nan area
@@ -181,7 +155,7 @@ class Runner(ExperimentBase):
                     depths_gt * non_zero_depth_mask,
                     reduction="sum",
                 ) / (non_zero_depth_mask.sum() + 1e-8)
-                depth_loss *= train_data.scene_scale
+                # depth_loss *= train_data.scene_scale
 
                 # Silhouette Loss
                 silhouette_loss = compute_silhouette_loss(
@@ -223,6 +197,10 @@ class Runner(ExperimentBase):
                     )
                     # IMAGE
                     if step % 50 == 0:
+                        psnr = self.config.psnr(
+                            (pixels * non_zero_depth_mask).permute(0, 3, 1, 2),
+                            (colors * non_zero_depth_mask).permute(0, 3, 1, 2),
+                        )
                         self.logger.plot_rgbd(
                             depths_gt.squeeze(-1).squeeze(0),
                             depths.squeeze(-1).squeeze(0),
@@ -234,8 +212,8 @@ class Runner(ExperimentBase):
                             color=train_data.pixels,
                             rastered_color=colors.squeeze(0),
                             color_loss={
-                                "type": "pixels_l1",
-                                "value": l1loss.item(),
+                                "type": "psnr",
+                                "value": psnr.item(),
                             },
                             step=step,
                             fig_title="gs_splats Visualization",

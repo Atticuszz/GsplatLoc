@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from natsort import natsorted
 
-from ..geometry import transform_points
+from ..geometry import compute_depth_gt, transform_points
 from ..utils import as_intrinsics_matrix, load_camera_cfg, to_tensor
 from .base import AlignData
 from .Image import RGBDImage
@@ -158,8 +158,23 @@ class Parser(Replica):
         # transform to world
         tar.points = transform_points(tar.pose, tar.points)
         src.points = transform_points(tar.pose, src.points)
+        scale_factor = torch.scalar_tensor(1.0, device=tar.points.device)
         if self.normalize:
-            tar, src = normalize_2C(tar, src)
+            tar, src, scale_factor = normalize_2C(tar, src)
+            ks = self.K.unsqueeze(0)  # [1, 3, 3]
+            h, w = src.depth.shape
+            src_rgbs = (src.color / 255.0).reshape(-1, 3)
+            src.depth = (
+                compute_depth_gt(
+                    src.points,
+                    src_rgbs,
+                    ks,
+                    c2w=tar.pose.unsqueeze(0),
+                    height=h,
+                    width=w,
+                )
+                / scale_factor
+            )
         # scene_scale_normed = scene_scale([tar_normed, src_normed])
         # combined
         points = torch.cat([tar.points, src.points], dim=0)  # N,3
@@ -168,7 +183,7 @@ class Parser(Replica):
         )  # N,3
 
         return AlignData(
-            # scene_scale=scene_scale_normed,
+            scale_factor=scale_factor,
             colors=rgbs,
             pixels=src.color / 255.0,
             points=points,
