@@ -110,17 +110,15 @@ class Runner(ExperimentBase):
                     height=height,
                 )
 
-                if renders.shape[-1] == 4:
-                    colors, _depths = renders[..., 0:3], renders[..., 3:4]
-                else:
-                    colors, _depths = renders, None
+                assert renders.shape[-1] == 4
+                colors, _depths = renders[..., 0:3], renders[..., 3:4]
+
                 # scale depth after normalized
                 if self.parser.normalize:
                     depths = _depths / train_data.scale_factor
                 else:
                     depths = _depths
 
-                info["means2d"].retain_grad()  # used for running stats
                 # NOTE:loss
                 # avoid nan area
                 non_zero_depth_mask = (depths != 0).float()
@@ -139,27 +137,12 @@ class Runner(ExperimentBase):
                 )
                 ssimloss = 1.0 - ssim_value
 
-                # Combined RGB Loss
-                rgb_loss = (
-                    l1loss * (1.0 - self.config.ssim_lambda)
-                    + ssimloss * self.config.ssim_lambda
-                ) * (1 - 1)
-
                 # Depth Loss
-                # depth_loss = F.l1_loss(
-                #     depths * non_zero_depth_mask,
-                #     depths_gt * non_zero_depth_mask,
-                #     reduction="sum",
-                # ) / (non_zero_depth_mask.sum() + 1e-8)
-                # depth_loss *= train_data.scene_scale
-                depth_loss = (
-                    compute_depth_loss(
-                        depths * non_zero_depth_mask,
-                        depths_gt * non_zero_depth_mask,
-                        loss_type="l1",
-                    )
-                    * non_zero_depth_mask.sum()
-                ) / (non_zero_depth_mask.sum() + 1e-8)
+                depth_loss = compute_depth_loss(
+                    depths * non_zero_depth_mask,
+                    depths_gt * non_zero_depth_mask,
+                    loss_type="l1",
+                )
 
                 # Silhouette Loss
                 silhouette_loss = compute_silhouette_loss(
