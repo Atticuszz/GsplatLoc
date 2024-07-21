@@ -80,7 +80,7 @@ class OptimizationConfig:
     lpips: LearnedPerceptualImagePatchSimilarity = None
 
     early_stop: bool = True
-    patience = 20
+    patience = 200
     best_eR = float("inf")
     best_eT = float("inf")
     best_loss = float("inf")
@@ -93,16 +93,8 @@ class OptimizationConfig:
 
 
 @dataclass
-class AppearanceConfig:
-    app_opt: bool = False
-    app_embed_dim: int = 16
-    app_opt_lr: float = 1e-3
-    app_opt_reg: float = 1e-6
-
-
-@dataclass
 class DepthLossConfig:
-    depth_loss: bool = True
+    depth_loss: bool = False
     depth_lambda: float = 0.5
 
 
@@ -130,7 +122,6 @@ class Config(
     TrainingConfig,
     DatasetConfig,
     OptimizationConfig,
-    AppearanceConfig,
     DepthLossConfig,
     ViewerConfig,
 ):
@@ -198,10 +189,13 @@ class TrainData(TensorWrapper):
     """normed data"""
 
     # for GS
-    scene_scale: float
+    points: Tensor  # N,3  in camera
     colors: Tensor  # N,3
     pixels: Tensor  # H,W,3
-    # in camera
-    points: Tensor  # N,3
+
     depth: Tensor  # H,w
     c2w: Tensor  # 4,4
+
+    scale_factor: Tensor = torch.scalar_tensor(
+        1.0
+    )  # for scale depth after rot normalized

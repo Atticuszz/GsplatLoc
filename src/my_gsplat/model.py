@@ -261,7 +261,7 @@ class GsConfig:
 
     # RasterizeConfig
     # Near plane clipping distance
-    near_plane: float = 1e-10
+    near_plane: float = 1e-5
     # Far plane clipping distance
     far_plane: float = 1e10
 
@@ -295,15 +295,14 @@ class GSModel(nn.Module):
         # Parameters
         self.means3d = points  # [N, 3]
         # self.means3d = nn.Parameter(points)  # [N, 3]
-        self.scales = nn.Parameter(scales)
-        self.opacities = nn.Parameter(
-            torch.logit(
-                torch.full((points.shape[0],), self.config.init_opa, device=DEVICE)
-            )
-        )  # [N,]
+        self.scales = scales
+        self.opacities = torch.logit(
+            torch.full((points.shape[0],), self.config.init_opa, device=DEVICE)
+        )
+        # [N,]
         # NOTE: no deformation
-        self.quats = torch.nn.Parameter(
-            to_tensor([1, 0, 0, 0], requires_grad=True).repeat(points.shape[0], 1)
+        self.quats = to_tensor([1, 0, 0, 0], requires_grad=True).repeat(
+            points.shape[0], 1
         )  # [N, 4]
         # self.quats = torch.nn.Parameter(quats)
 
@@ -312,25 +311,11 @@ class GSModel(nn.Module):
             (points.shape[0], (self.config.sh_degree + 1) ** 2, 3), device=DEVICE
         )  # [N, K, 3]
         colors[:, 0, :] = rgb_to_sh(rgbs)  # Initialize SH coefficients
-        self.colors = nn.Parameter(rgbs)
-        self.sh0 = torch.nn.Parameter(colors[:, :1, :])
-        self.shN = torch.nn.Parameter(colors[:, 1:, :])
+        self.colors = rgbs
+        self.sh0 = colors[:, :1, :]
+        self.shN = colors[:, 1:, :]
 
-        # Learning rates (not parameters, stored for optimizer setup)
-        # self.lr_means3d = 1.6e-4 * scene_scale
-        self.lr_scales = 5e-3
-        self.lr_opacities = 5e-2
-        self.lr_colors = 2.5e-3
-        self.lr_sh0 = 2.5e-3
-        self.lr_shN = 2.5e-3 / 20
-        self.optimizers = self._create_optimizers()
-
-        # Running stats for prunning & growing.
-        n_gauss = points.shape[0]
-        self.running_stats = {
-            "grad2d": torch.zeros(n_gauss, device=DEVICE),  # norm of the gradient
-            "count": torch.zeros(n_gauss, device=DEVICE, dtype=torch.int),
-        }
+        # self.optimizers = self._create_optimizers()
 
     def __len__(self):
         return self.means3d.shape[0]
@@ -366,7 +351,7 @@ class GSModel(nn.Module):
             far_plane=self.config.far_plane,
             near_plane=self.config.near_plane,
             render_mode=render_mode,
-            rasterize_mode="antialiased" if self.config.antialiased else "classic",
+            rasterize_mode="classic",
         )
 
         return render_colors, render_alphas, info
@@ -408,80 +393,73 @@ class GSModel(nn.Module):
         self,
         color_image: Tensor,
         depth_image: Tensor,
-        mask: Tensor,
-        camera_matrix: Tensor,
+        render_mask: Tensor,
+        Ks: Tensor,
         camera_pose: Tensor,
+        threshold: float = 0.5,
     ):
         """
-        添加新的高斯分布点。
+        Add new Gaussian based on input images and camera parameters.
 
-        参数:
-        color_image: tensor, shape (H, W, 3)
-        depth_image: tensor, shape (H, W)
-        mask: tensor, shape (H, W), 布尔值，True 表示需要添加新的高斯
-        camera_matrix: tensor, shape (3, 3)
-        camera_pose: tensor, shape (4, 4), 相机到世界坐标的变换矩阵
+        Parameters
+        ----------
+        color_image : Tensor
+            Normalized RGB image tensor of shape (H, W, 3).
+        depth_image : Tensor
+            Depth image tensor of shape (H, W).
+        render_mask : Tensor
+            Binary mask tensor of shape (H, W). 0 indicates areas where new points need to be added.
+        Ks : Tensor
+            Camera intrinsic matrix of shape (3, 3).
+        camera_pose : Tensor
+            Camera extrinsic matrix (camera-to-world transformation) of shape (4, 4).
+        threshold : float, optional
+            Threshold for determining whether to add new points, by default 0.5.
+
+        Returns
+        -------
+        None
         """
-        height, width = depth_image.shape
 
-        # 使用 Kornia 将深度图转换为 3D 点云
-        points_2d = kornia.create_meshgrid(
-            height, width, normalized_coordinates=False
-        ).to(depth_image.device)
-        points_3d = kornia.geometry.depth_to_3d(
-            depth_image.unsqueeze(0), camera_matrix.unsqueeze(0), points_2d
-        )
+        # if to add
+        if (~render_mask).sum() / (render_mask.numel()) < threshold:
 
-        # 将点从相机坐标系转换到世界坐标系
+            return
+        valid_mask = (depth_image.view(-1) > 0) & (~render_mask.view(-1))
+        print("adding new gs")
+        # depths project to world
+        points_3d = kornia.geometry.depth_to_3d_v2(depth_image, Ks)
         points_3d_homogeneous = F.pad(points_3d.view(-1, 3), (0, 1), value=1)
         world_coords = (camera_pose @ points_3d_homogeneous.T).T[:, :3]
 
-        # 应用 mask 和深度过滤
-        valid_mask = (depth_image.view(-1) > 0) & mask.view(-1)
         new_points = world_coords[valid_mask]
         new_colors = color_image.view(-1, 3)[valid_mask]
 
-        # 更新模型参数
         n_new = new_points.shape[0]
+        n_old = self.means3d.shape[0]
+        n_total = n_old + n_new
+        # Resize parameters
+        self.means3d = nn.Parameter(torch.cat([self.means3d, new_points], dim=0))
 
-        self.means3d = torch.cat([self.means3d, new_points], dim=0)
-
-        new_scales = torch.log(torch.ones_like(new_points) * 0.01)
-        self.scales = nn.Parameter(torch.cat([self.scales, new_scales], dim=0))
-
-        new_opacities = torch.logit(
-            torch.full((n_new,), self.config.init_opa, device=self.means3d.device)
-        )
-        self.opacities = nn.Parameter(torch.cat([self.opacities, new_opacities], dim=0))
-
-        new_quats = torch.tensor([1, 0, 0, 0], device=self.means3d.device).repeat(
-            n_new, 1
-        )
-        self.quats = nn.Parameter(torch.cat([self.quats, new_quats], dim=0))
-
+        # append colors
+        self.colors = torch.cat([self.colors, new_colors.reshape(-1, 3)], dim=0)
         new_colors_sh = torch.zeros(
-            (n_new, (self.config.sh_degree + 1) ** 2, 3), device=self.means3d.device
+            (n_total, (self.config.sh_degree + 1) ** 2, 3), device=self.means3d.device
         )
-        new_colors_sh[:, 0, :] = rgb_to_sh(new_colors)  # 假设 rgb_to_sh 函数已定义
-        self.sh0 = nn.Parameter(torch.cat([self.sh0, new_colors_sh[:, :1, :]], dim=0))
-        self.shN = nn.Parameter(torch.cat([self.shN, new_colors_sh[:, 1:, :]], dim=0))
+        new_colors_sh[:, 0, :] = rgb_to_sh(self.colors)
+        # Update sh0 and shN
+        self.sh0 = new_colors_sh[:, :1, :]
+        self.shN = new_colors_sh[:, 1:, :]
 
-        # 更新 running_stats
-        self.running_stats["grad2d"] = torch.cat(
-            [
-                self.running_stats["grad2d"],
-                torch.zeros(n_new, device=self.means3d.device),
-            ]
-        )
-        self.running_stats["count"] = torch.cat(
-            [
-                self.running_stats["count"],
-                torch.zeros(n_new, device=self.means3d.device, dtype=torch.int),
-            ]
-        )
+        # Repeat
+        new_scales = self.scales[-1].unsqueeze(0).repeat(n_new, 1)
+        self.scales = torch.cat([self.scales, new_scales], dim=0)
 
-        # 更新优化器
-        self.optimizers = self._create_optimizers()
+        new_opacities = self.opacities[-1].repeat(n_new)
+        self.opacities = torch.cat([self.opacities, new_opacities], dim=0)
+
+        new_quats = self.quats[-1].unsqueeze(0).repeat(n_new, 1)
+        self.quats = torch.cat([self.quats, new_quats], dim=0)
 
     @torch.no_grad()
     def update_running_stats(self, info: dict):

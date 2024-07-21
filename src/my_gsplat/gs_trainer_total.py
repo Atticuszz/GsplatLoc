@@ -54,8 +54,8 @@ class Runner(ExperimentBase):
     def train(self):
         # torch.autograd.set_detect_anomaly(True)
         torch.set_float32_matmul_precision("high")
-        # BUG: black area
-        for i, train_data in enumerate([self.parser[5]]):
+
+        for i, train_data in enumerate(self.parser):
             # NOTE: train data loop
             train_data: AlignData
             height, width = train_data.pixels.shape[:2]
@@ -108,12 +108,10 @@ class Runner(ExperimentBase):
                     Ks=Ks,  # [1, 3, 3],
                     width=width,
                     height=height,
-                    render_mode="ED",
                 )
 
-                # assert renders.shape[-1] == 4
-                # colors, _depths = renders[..., 0:3], renders[..., 3:4]
-                _depths = renders
+                assert renders.shape[-1] == 4
+                colors, _depths = renders[..., 0:3], renders[..., 3:4]
 
                 # scale depth after normalized
                 if self.parser.normalize:
@@ -125,14 +123,14 @@ class Runner(ExperimentBase):
                 # avoid nan area
                 non_zero_depth_mask = (depths != 0).float()
 
-                # RGB L1 Loss
+                # # RGB L1 Loss
                 # l1loss = F.l1_loss(
                 #     colors * non_zero_depth_mask,
                 #     pixels * non_zero_depth_mask,
                 #     reduction="sum",
                 # ) / (non_zero_depth_mask.sum() + 1e-8)
 
-                # SSIM Loss
+                # # SSIM Loss
                 # ssim_value = self.config.ssim(
                 #     (pixels * non_zero_depth_mask).permute(0, 3, 1, 2),
                 #     (colors * non_zero_depth_mask).permute(0, 3, 1, 2),
@@ -167,81 +165,22 @@ class Runner(ExperimentBase):
                 total_loss.backward(retain_graph=True)
                 # NOTE: logger
                 with torch.no_grad():
-                    # loss
-                    self.logger.log_loss("total_loss", total_loss.item(), step=step)
-                    # self.logger.log_loss(
-                    #     "pixels", l1loss.item(), step=step, l_type="l1"
-                    # )
-                    # self.logger.log_loss(
-                    #     "pixels", ssimloss.item(), step=step, l_type="ssim"
-                    # )
-                    self.logger.log_loss(
-                        "depth", depth_loss.item(), step=step, l_type="l1"
-                    )
-                    self.logger.log_loss(
-                        "silhouette_loss",
-                        silhouette_loss.item(),
-                        step=step,
-                        l_type="l1",
-                    )
-                    # IMAGE
-                    if step % 1 == 0:
-                        # psnr = self.config.psnr(
-                        #     (pixels * non_zero_depth_mask).permute(0, 3, 1, 2),
-                        #     (colors * non_zero_depth_mask).permute(0, 3, 1, 2),
-                        # )
-                        self.logger.plot_rgbd(
-                            depths_gt.squeeze(-1).squeeze(0),
-                            depths.squeeze(-1).squeeze(0),
-                            # combined_projected_depth,
-                            {
-                                "type": "l1",
-                                "value": depth_loss.item(),
-                            },
-                            # color=train_data.pixels,
-                            # rastered_color=colors.squeeze(0),
-                            # color_loss={
-                            #     "type": "psnr",
-                            #     "value": psnr.item(),
-                            # },
-                            step=step,
-                            fig_title="gs_splats Visualization",
-                        )
-                    # NOTE: monitor the pose error
-                    eT = calculate_translation_error(
-                        cur_c2w.squeeze(-1).squeeze(0),
-                        train_data.src_c2w.squeeze(-1).squeeze(0),
-                    )
-
-                    eR = calculate_rotation_error(
-                        cur_c2w.squeeze(-1).squeeze(0),
-                        train_data.src_c2w.squeeze(-1).squeeze(0),
-                    )
-                    # Error
-                    self.logger.log_translation_error(eT, step=step)
-                    self.logger.log_rotation_error(eR, step=step)
-                    # LR
-                    self.logger.log_LR(
-                        model=camera_opt,
-                        schedulers=schedulers,
-                        step=step,
-                    )
-                    # self.logger.log_LR(
-                    #     model=gs_splats,
-                    #     schedulers=schedulers[2:],
-                    #     step=step,
-                    # )
 
                     # NOTE: early stop
                     desc = f"loss={total_loss.item():.8f}|"
                     pbar.set_description(desc)
+
                     if self.config.early_stop:
-                        # if eR < self.config.best_eR and eT < self.config.best_eT:
-                        #     self.config.best_eR = eR
-                        #     self.config.best_eT = eT
-                        #     self.config.counter = 0  # 重置计数器
-                        # else:
-                        #     self.config.counter += 1
+                        # NOTE: monitor the pose error
+                        eT = calculate_translation_error(
+                            cur_c2w.squeeze(-1).squeeze(0),
+                            train_data.src_c2w.squeeze(-1).squeeze(0),
+                        )
+
+                        eR = calculate_rotation_error(
+                            cur_c2w.squeeze(-1).squeeze(0),
+                            train_data.src_c2w.squeeze(-1).squeeze(0),
+                        )
                         if depth_loss.item() < self.config.best_loss:
                             self.config.best_loss = depth_loss.item()
                             self.config.best_eT = eT
@@ -249,12 +188,73 @@ class Runner(ExperimentBase):
                             self.config.counter = 0
                         else:
                             self.config.counter += 1
-                        desc += f"best_eR:{self.config.best_eR}| best_eT: {self.config.best_eT}|"
+                        desc += f"best_eR:{self.config.best_eR}| best_eT: {self.config.best_eT}|cur_i:{i}|"
                         pbar.set_description(desc)
                         if self.config.counter >= self.config.patience:
-                            desc += f"\nEarly stopping triggered at step {step}|"
-                            self.config.counter = 0
+                            desc += f"Early stopping triggered at step {step}|"
+                            # clean
+                            (
+                                self.config.counter,
+                                self.config.best_loss,
+                                self.config.best_eT,
+                                self.config.best_eR,
+                            ) = (0, float("inf"), float("inf"), float("inf"))
+
                             pbar.set_description(desc)
+
+                            # NOTE: log here
+                            # loss
+                            self.logger.log_loss(
+                                "total_loss", total_loss.item(), step=i
+                            )
+                            # self.logger.log_loss(
+                            #     "pixels", l1loss.item(), step=i, l_type="l1"
+                            # )
+                            # self.logger.log_loss(
+                            #     "pixels", ssimloss.item(), step=i, l_type="ssim"
+                            # )
+                            self.logger.log_loss(
+                                "depth", depth_loss.item(), step=i, l_type="l1"
+                            )
+                            self.logger.log_loss(
+                                "silhouette_loss",
+                                silhouette_loss.item(),
+                                step=i,
+                                l_type="l1",
+                            )
+                            # NOTE: IMAGE
+                            #
+                            # psnr = self.config.psnr(
+                            #     (pixels * non_zero_depth_mask).permute(0, 3, 1, 2),
+                            #     (colors * non_zero_depth_mask).permute(0, 3, 1, 2),
+                            # )
+                            self.logger.plot_rgbd(
+                                depths_gt.squeeze(-1).squeeze(0),
+                                depths.squeeze(-1).squeeze(0),
+                                # combined_projected_depth,
+                                {
+                                    "type": "l1",
+                                    "value": depth_loss.item(),
+                                },
+                                # color=train_data.pixels,
+                                # rastered_color=colors.squeeze(0),
+                                # color_loss={
+                                #     "type": "psnr",
+                                #     "value": psnr.item(),
+                                # },
+                                step=i,
+                                fig_title="gs_splats Visualization",
+                            )
+
+                            # Error
+                            self.logger.log_translation_error(eT, step=i)
+                            self.logger.log_rotation_error(eR, step=i)
+                            # LR
+                            self.logger.log_LR(
+                                model=camera_opt,
+                                schedulers=schedulers,
+                                step=i,
+                            )
                             break
 
                 for optimizer in camera_opt.optimizers:
@@ -262,28 +262,6 @@ class Runner(ExperimentBase):
                     optimizer.zero_grad(set_to_none=True)
                 for scheduler in schedulers:
                     scheduler.step()
-
-                # # save checkpoint
-                # if step in [i - 1 for i in self.save_steps] or step == max_steps - 1:
-                #     mem = torch.cuda.max_memory_allocated() / 1024**3
-                #     stats = {
-                #         "mem": mem,
-                #         "ellipse_time": time.time() - global_tic,
-                #         "num_GS": len(gs_splats),
-                #     }
-                #     print("Step: ", step, stats)
-                #     with open(f"{self.stats_dir}/train_step{step:04d}.json", "w") as f:
-                #         json.dump(stats, f)
-                #     torch.save(
-                #         {
-                #             "step": step,
-                #             "splats": gs_splats.state_dict(),
-                #         },
-                #         f"{self.ckpt_dir}/ckpt_{step}.pt",
-                #     )
-
-                # if step in [i - 1 for i in self.eval_steps] or step == max_steps - 1:
-                #     self.eval(gs_splats, cur_c2w, step)
 
                 # viewer
                 if not self.config.disable_viewer:
@@ -298,4 +276,4 @@ class Runner(ExperimentBase):
                     )
                     # Update the scene.
                     self.config.viewer.update(step, num_train_rays_per_step)
-            self.logger.finish()
+        self.logger.finish()

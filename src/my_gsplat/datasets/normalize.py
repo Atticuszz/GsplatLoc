@@ -2,10 +2,11 @@ import torch
 from torch import Tensor
 
 from .Image import RGBDImage
+from .base import TrainData
 
 
-# @torch.compile
 @torch.no_grad()
+@torch.compile
 def similarity_from_cameras(
     c2w: torch.Tensor, strict_scaling: bool = False, center_method: str = "focus"
 ) -> torch.Tensor:
@@ -83,8 +84,8 @@ def similarity_from_cameras(
     return transform
 
 
-# @torch.compile
 @torch.no_grad()
+@torch.compile
 def align_principle_axes(point_cloud: torch.Tensor) -> torch.Tensor:
     """
     Align the principal axes of a point cloud to the coordinate axes using PCA.
@@ -130,8 +131,8 @@ def align_principle_axes(point_cloud: torch.Tensor) -> torch.Tensor:
     return transform
 
 
-# @torch.compile
 @torch.no_grad()
+@torch.compile
 def transform_points(matrix: torch.Tensor, points: torch.Tensor) -> torch.Tensor:
     """
     Transform points using a SE(3) transformation matrix.
@@ -153,8 +154,8 @@ def transform_points(matrix: torch.Tensor, points: torch.Tensor) -> torch.Tensor
     return torch.addmm(matrix[:3, 3], points, matrix[:3, :3].t())
 
 
-# @torch.compile
 @torch.no_grad()
+@torch.compile
 def transform_cameras(
     matrix: torch.Tensor, c2w: torch.Tensor
 ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -218,7 +219,7 @@ def normalize_dataset_slice(dataset_slice: list[RGBDImage]) -> list[RGBDImage]:
     return dataset_slice
 
 
-# @torch.compile
+@torch.compile
 @torch.no_grad()
 def normalize_2C(tar: RGBDImage, src: RGBDImage) -> tuple[RGBDImage, RGBDImage, Tensor]:
     """normalize two rgb-d image with tar.pose"""
@@ -237,6 +238,26 @@ def normalize_2C(tar: RGBDImage, src: RGBDImage) -> tuple[RGBDImage, RGBDImage, 
     normed_src_pose, scale_factor = transform_cameras(transform, src.pose.unsqueeze(0))
     src.pose = normed_src_pose.squeeze(0)
     return tar, src, scale_factor
+
+
+def apply_normalize_T(tar: TrainData, T: Tensor) -> None:
+    # NOTE: must in world
+    tar.points = transform_points(T, tar.points)
+    normed_tar_pose, scale_factor = transform_cameras(T, tar.c2w.unsqueeze(0))
+    tar.pose = normed_tar_pose.squeeze(0)
+    tar.scale_factor = scale_factor
+
+
+def normalize_T(tar: RGBDImage) -> Tensor:
+    """normalize rgb-d image with PCA"""
+    pose = tar.pose.unsqueeze(0)  # -> N,4,4 pose in world
+    # calculate tar points normalization transform
+    points = tar.points
+    T1 = similarity_from_cameras(pose)
+    T2 = align_principle_axes(transform_points(T1, points))
+    transform = T2 @ T1
+
+    return transform
 
 
 @torch.no_grad()

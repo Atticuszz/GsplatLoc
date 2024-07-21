@@ -8,7 +8,7 @@ from torch import Tensor
 from .utils import DEVICE, knn, rgb_to_sh, to_tensor
 
 
-# @torch.compile
+@torch.compile
 def construct_full_pose(rotation: Tensor, translation: Tensor):
     """
     Constructs the full 4x4 transformation matrix from rotation and translation.
@@ -20,7 +20,7 @@ def construct_full_pose(rotation: Tensor, translation: Tensor):
     return pose
 
 
-# @torch.compile
+@torch.compile
 def rotation_matrix_to_quaternion(rotation_matrix: Tensor) -> Tensor:
     """
     Convert a rotation matrix to a quaternion.
@@ -83,7 +83,7 @@ def matrix_to_rotation_6d(matrix: torch.Tensor) -> torch.Tensor:
     return matrix[..., :2, :].clone().reshape(batch_dim + (6,))
 
 
-# @torch.compile
+@torch.compile
 def quat_to_rotation_matrix(quaternion: Tensor) -> Tensor:
     """
     Convert a quaternion to a rotation matrix.
@@ -103,7 +103,7 @@ def quat_to_rotation_matrix(quaternion: Tensor) -> Tensor:
     return KG.quaternion_to_rotation_matrix(normalized_quaternion)
 
 
-# @torch.compile
+@torch.compile
 def compute_silhouette_diff(depth: Tensor, rastered_depth: Tensor) -> Tensor:
     """
     Compute the difference between the sobel edges of two depth images.
@@ -134,40 +134,7 @@ def compute_silhouette_diff(depth: Tensor, rastered_depth: Tensor) -> Tensor:
     return silhouette_diff
 
 
-def add_background_and_penalize_depth(
-    image: Tensor,
-    depth: Tensor,
-    alphas: Tensor,
-    background_color: Tensor = torch.tensor([1.0, 1.0, 1.0], device=DEVICE),
-):
-    """
-    对透明区域添加背景色，并对深度为0的区域施加高惩罚。
-
-    参数:
-    - image: 彩色图像，形状为 [B, H, W, C]。
-    - depth: 深度图，形状为 [B, H, W, 1]。
-    - alphas: 透明度图，形状为 [B, H, W, 1]。
-    - background_color: 背景颜色，形状为 [C]。
-    - depth_penalty: 深度为0的区域的高惩罚值。
-
-    返回:
-    - updated_image: 更新后的彩色图像。
-    - updated_depth: 更新后的深度图。
-    """
-    depth_penalty = torch.max(depth).item()
-    background_color = background_color.view(1, 1, 1, -1).expand_as(image)
-    transparent_mask = alphas == 0
-    zero_depth_mask = depth == 0
-    updated_image = torch.where(
-        transparent_mask.expand_as(image), background_color, image
-    )
-    updated_depth = torch.where(
-        zero_depth_mask, torch.full_like(depth, depth_penalty), depth
-    )
-    return updated_image, updated_depth
-
-
-# @torch.compile
+@torch.compile
 def transform_points(matrix: torch.Tensor, points: torch.Tensor) -> torch.Tensor:
     """
     Transform points using a SE(3) transformation matrix.
@@ -254,7 +221,7 @@ def compute_depth_gt(
         width=width,
         height=height,
         far_plane=1e10,
-        near_plane=1e-10,
+        near_plane=1e-5,
         render_mode="ED",
         rasterize_mode="classic",
     )

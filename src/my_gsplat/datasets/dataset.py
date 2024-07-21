@@ -7,9 +7,9 @@ from natsort import natsorted
 
 from ..geometry import compute_depth_gt, transform_points
 from ..utils import as_intrinsics_matrix, load_camera_cfg, to_tensor
-from .base import AlignData
+from .base import AlignData, TrainData
 from .Image import RGBDImage
-from .normalize import normalize_2C
+from .normalize import normalize_2C, normalize_T
 
 
 class DataLoaderBase:
@@ -193,4 +193,31 @@ class Parser(Replica):
             tar_c2w=tar.pose,
             src_c2w=src.pose,
             tar_nums=tar.points.shape[0],
+        )
+
+
+class Parser2(Replica):
+    def __init__(self, name: str = "room0", normalize: bool = False):
+        super().__init__(name=name)
+        self.K = to_tensor(self.K, requires_grad=True)
+        # normalize points and pose
+        init_rgb_d: RGBDImage = super().__getitem__(500)
+
+        self.normalize_T = normalize_T(init_rgb_d) if normalize else None
+
+    def __len__(self) -> int:
+        return super().__len__()
+
+    def __getitem__(self, index: int) -> TrainData:
+        assert index < len(self)
+        tar = super().__getitem__(index)
+
+        rgbs = (tar.color / 255.0).reshape(-1, 3)  # N,3
+
+        return TrainData(
+            colors=rgbs,
+            pixels=tar.color / 255.0,
+            points=tar.points,
+            depth=tar.depth,
+            c2w=tar.pose,
         )
