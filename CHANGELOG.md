@@ -1,8 +1,24 @@
 # CHANGELOG
 
+## v0.7.0 (2024-07-21)
+
+### Chore
+
+* chore: format train ([`afb8592`](https://github.com/Atticuszz/AB_GICP/commit/afb8592a1a83688122b8887356308cfb19fdcda7))
+
+* chore: format loss func ([`87ae6e5`](https://github.com/Atticuszz/AB_GICP/commit/87ae6e59782cc9633bcb44b8a8cffd442b45b630))
+
+* chore: add gaussian-opacity-fields submodules ([`8124863`](https://github.com/Atticuszz/AB_GICP/commit/8124863dd116ffcf93a80ab8034f78d45a767d96))
+
+### Feature
+
+* feat: add total dataset eval simple version ([`3aca4c6`](https://github.com/Atticuszz/AB_GICP/commit/3aca4c69747f5dafa0a88389771e3b01755afa0b))
+
 ## v0.6.4 (2024-07-14)
 
 ### Chore
+
+* chore(release): bump version to v0.6.4 ([`131ff0b`](https://github.com/Atticuszz/AB_GICP/commit/131ff0be6df7327d0c37c4e3b4e566708be93cbe))
 
 * chore: add torch.compile and try to add early stop method ([`994a961`](https://github.com/Atticuszz/AB_GICP/commit/994a961b81dce52d268aeffa9aebad25f74a1b8c))
 
