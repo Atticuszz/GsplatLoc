@@ -8,7 +8,7 @@ from torch import Tensor
 from .utils import DEVICE, knn, rgb_to_sh, to_tensor
 
 
-@torch.compile
+# @torch.compile
 def construct_full_pose(rotation: Tensor, translation: Tensor):
     """
     Constructs the full 4x4 transformation matrix from rotation and translation.
@@ -20,7 +20,7 @@ def construct_full_pose(rotation: Tensor, translation: Tensor):
     return pose
 
 
-@torch.compile
+# @torch.compile
 def rotation_matrix_to_quaternion(rotation_matrix: Tensor) -> Tensor:
     """
     Convert a rotation matrix to a quaternion.
@@ -38,7 +38,7 @@ def rotation_matrix_to_quaternion(rotation_matrix: Tensor) -> Tensor:
     return KG.rotation_matrix_to_quaternion(rotation_matrix)
 
 
-# @torch.compile
+# # @torch.compile
 def rotation_6d_to_matrix(d6: Tensor) -> Tensor:
     """
     Converts 6D rotation representation by Zhou et al. [1] to rotation matrix
@@ -63,7 +63,7 @@ def rotation_6d_to_matrix(d6: Tensor) -> Tensor:
     return torch.stack((b1, b2, b3), dim=-2)
 
 
-# @torch.compile
+# # @torch.compile
 def matrix_to_rotation_6d(matrix: torch.Tensor) -> torch.Tensor:
     """
     Converts rotation matrices to 6D rotation representation by Zhou et al. [1]
@@ -83,7 +83,7 @@ def matrix_to_rotation_6d(matrix: torch.Tensor) -> torch.Tensor:
     return matrix[..., :2, :].clone().reshape(batch_dim + (6,))
 
 
-@torch.compile
+# @torch.compile
 def quat_to_rotation_matrix(quaternion: Tensor) -> Tensor:
     """
     Convert a quaternion to a rotation matrix.
@@ -103,7 +103,7 @@ def quat_to_rotation_matrix(quaternion: Tensor) -> Tensor:
     return KG.quaternion_to_rotation_matrix(normalized_quaternion)
 
 
-@torch.compile
+# @torch.compile
 def compute_silhouette_diff(depth: Tensor, rastered_depth: Tensor) -> Tensor:
     """
     Compute the difference between the sobel edges of two depth images.
@@ -134,7 +134,7 @@ def compute_silhouette_diff(depth: Tensor, rastered_depth: Tensor) -> Tensor:
     return silhouette_diff
 
 
-@torch.compile
+# @torch.compile
 def transform_points(matrix: torch.Tensor, points: torch.Tensor) -> torch.Tensor:
     """
     Transform points using a SE(3) transformation matrix.
@@ -221,7 +221,7 @@ def compute_depth_gt(
         width=width,
         height=height,
         far_plane=1e10,
-        near_plane=1e-5,
+        near_plane=1e-2,
         render_mode="ED",
         rasterize_mode="classic",
     )

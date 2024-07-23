@@ -16,7 +16,14 @@ from .geometry import (
     rotation_6d_to_matrix,
     rotation_matrix_to_quaternion,
 )
-from .utils import DEVICE, knn, normalized_quat_to_rotmat, rgb_to_sh, to_tensor
+from .utils import (
+    DEVICE,
+    knn,
+    normalized_quat_to_rotmat,
+    rgb_to_sh,
+    to_tensor,
+    visualize_point_cloud,
+)
 
 
 class _CameraOptModule(torch.nn.Module):
@@ -261,7 +268,7 @@ class GsConfig:
 
     # RasterizeConfig
     # Near plane clipping distance
-    near_plane: float = 1e-5
+    near_plane: float = 1e-2
     # Far plane clipping distance
     far_plane: float = 1e10
 
@@ -281,11 +288,7 @@ class GSModel(nn.Module):
         self.config = config
         self.batch_size = batch_size
         points = points
-        # points = gs_data.points
         rgbs = colors
-        # rgbs = gs_data.colors
-        # scene_scale = gs_data.scene_scale
-        # scene_scale = gs_data.scene_scale
 
         # Calculate distances for initial scale
         dist2_avg = (knn(points, 4)[:, 1:] ** 2).mean(dim=-1)
@@ -330,8 +333,8 @@ class GSModel(nn.Module):
     ):
         assert self.means3d.shape[0] == self.opacities.shape[0]
         opacities = torch.sigmoid(self.opacities)
-        colors = torch.cat([self.sh0, self.shN], 1)
-        # colors = torch.sigmoid(self.colors)
+        # colors = torch.cat([self.sh0, self.shN], 1)
+        colors = torch.sigmoid(self.colors)
         scales = torch.exp(self.scales)
 
         render_colors, render_alphas, info = rasterization(
@@ -340,7 +343,7 @@ class GSModel(nn.Module):
             scales=scales,
             opacities=opacities,
             colors=colors,
-            sh_degree=self.config.sh_degree,
+            # sh_degree=self.config.sh_degree,
             viewmats=torch.linalg.inv(camtoworlds),
             Ks=Ks,
             width=width,

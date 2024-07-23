@@ -181,8 +181,10 @@ class Runner(ExperimentBase):
                             cur_c2w.squeeze(-1).squeeze(0),
                             train_data.src_c2w.squeeze(-1).squeeze(0),
                         )
-                        if depth_loss.item() < self.config.best_loss:
-                            self.config.best_loss = depth_loss.item()
+                        if depth_loss.item() < self.config.best_depth_loss:
+                            self.config.best_loss = total_loss.item()
+                            self.config.best_silhouette_loss = silhouette_loss.item()
+                            self.config.best_depth_loss = depth_loss.item()
                             self.config.best_eT = eT
                             self.config.best_eR = eR
                             self.config.counter = 0
@@ -191,21 +193,10 @@ class Runner(ExperimentBase):
                         desc += f"best_eR:{self.config.best_eR}| best_eT: {self.config.best_eT}|cur_i:{i}|"
                         pbar.set_description(desc)
                         if self.config.counter >= self.config.patience:
-                            desc += f"Early stopping triggered at step {step}|"
-                            # clean
-                            (
-                                self.config.counter,
-                                self.config.best_loss,
-                                self.config.best_eT,
-                                self.config.best_eR,
-                            ) = (0, float("inf"), float("inf"), float("inf"))
-
-                            pbar.set_description(desc)
-
                             # NOTE: log here
                             # loss
                             self.logger.log_loss(
-                                "total_loss", total_loss.item(), step=i
+                                "total_loss", self.config.best_loss, step=i
                             )
                             # self.logger.log_loss(
                             #     "pixels", l1loss.item(), step=i, l_type="l1"
@@ -214,11 +205,14 @@ class Runner(ExperimentBase):
                             #     "pixels", ssimloss.item(), step=i, l_type="ssim"
                             # )
                             self.logger.log_loss(
-                                "depth", depth_loss.item(), step=i, l_type="l1"
+                                "depth",
+                                self.config.best_depth_loss,
+                                step=i,
+                                l_type="l1",
                             )
                             self.logger.log_loss(
                                 "silhouette_loss",
-                                silhouette_loss.item(),
+                                self.config.best_silhouette_loss,
                                 step=i,
                                 l_type="l1",
                             )
@@ -247,14 +241,36 @@ class Runner(ExperimentBase):
                             )
 
                             # Error
-                            self.logger.log_translation_error(eT, step=i)
-                            self.logger.log_rotation_error(eR, step=i)
+                            self.logger.log_translation_error(
+                                self.config.best_eT, step=i
+                            )
+                            self.logger.log_rotation_error(self.config.best_eR, step=i)
                             # LR
                             self.logger.log_LR(
                                 model=camera_opt,
                                 schedulers=schedulers,
                                 step=i,
                             )
+                            desc += f"Early stopping triggered at step {step}|"
+                            # NOTE: clean
+                            (
+                                self.config.counter,
+                                self.config.best_loss,
+                                self.config.best_silhouette_loss,
+                                self.config.best_depth_loss,
+                                self.config.best_eT,
+                                self.config.best_eR,
+                            ) = (
+                                0,
+                                float("inf"),
+                                float("inf"),
+                                float("inf"),
+                                float("inf"),
+                                float("inf"),
+                            )
+
+                            pbar.set_description(desc)
+
                             break
 
                 for optimizer in camera_opt.optimizers:

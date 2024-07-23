@@ -9,6 +9,7 @@ import torch
 import yaml
 from numpy.typing import NDArray
 from torch import Tensor
+import open3d as o3d
 
 DEVICE = (
     "cuda"
@@ -212,3 +213,30 @@ def calculate_rotation_error(
     # Convert radians to degrees manually
     rotation_error = (theta * 180 / torch.pi).item()
     return rotation_error
+
+
+def visualize_point_cloud(points: torch.Tensor, colors: torch.Tensor):
+    """
+    使用Open3D可视化点云数据。
+
+    参数:
+    points (torch.Tensor): 形状为(N, 3)的点坐标张量。
+    colors (torch.Tensor): 形状为(N, 3)的颜色张量，值范围在0到1之间。
+
+    """
+    # 确保输入是正确的形状
+    assert points.shape[1] == 3, "点坐标应该是(N, 3)形状"
+    assert colors.shape[1] == 3, "颜色应该是(N, 3)形状"
+    assert points.shape[0] == colors.shape[0], "点和颜色的数量应该相同"
+
+    # 转换为numpy数组
+    points_np = points.detach().cpu().numpy()
+    colors_np = colors.detach().cpu().numpy()
+
+    # 创建Open3D点云对象
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(points_np)
+    pcd.colors = o3d.utility.Vector3dVector(colors_np)
+
+    # 可视化点云
+    o3d.visualization.draw_geometries([pcd])

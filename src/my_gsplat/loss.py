@@ -7,7 +7,7 @@ from torch import Tensor
 from torch.nn import functional as F
 
 
-@torch.compile
+# @torch.compile
 def compute_depth_loss(
     depth_A: Tensor,
     depth_B: Tensor,
@@ -35,7 +35,7 @@ def compute_depth_loss(
         raise ValueError("Invalid loss type. Use 'mse' or 'l1'.")
 
 
-@torch.compile
+# @torch.compile
 def compute_silhouette_loss(
     depth_A: Tensor, depth_B: Tensor, *, loss_type: Literal["l1", "mse"] = "l1"
 ) -> Tensor:

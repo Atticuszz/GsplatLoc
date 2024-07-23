@@ -6,7 +6,7 @@ from .base import TrainData
 
 
 @torch.no_grad()
-@torch.compile
+# @torch.compile
 def similarity_from_cameras(
     c2w: torch.Tensor, strict_scaling: bool = False, center_method: str = "focus"
 ) -> torch.Tensor:
@@ -85,7 +85,7 @@ def similarity_from_cameras(
 
 
 @torch.no_grad()
-@torch.compile
+# @torch.compile
 def align_principle_axes(point_cloud: torch.Tensor) -> torch.Tensor:
     """
     Align the principal axes of a point cloud to the coordinate axes using PCA.
@@ -132,7 +132,7 @@ def align_principle_axes(point_cloud: torch.Tensor) -> torch.Tensor:
 
 
 @torch.no_grad()
-@torch.compile
+# @torch.compile
 def transform_points(matrix: torch.Tensor, points: torch.Tensor) -> torch.Tensor:
     """
     Transform points using a SE(3) transformation matrix.
@@ -155,7 +155,7 @@ def transform_points(matrix: torch.Tensor, points: torch.Tensor) -> torch.Tensor
 
 
 @torch.no_grad()
-@torch.compile
+# @torch.compile
 def transform_cameras(
     matrix: torch.Tensor, c2w: torch.Tensor
 ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -219,7 +219,7 @@ def normalize_dataset_slice(dataset_slice: list[RGBDImage]) -> list[RGBDImage]:
     return dataset_slice
 
 
-@torch.compile
+# @torch.compile
 @torch.no_grad()
 def normalize_2C(tar: RGBDImage, src: RGBDImage) -> tuple[RGBDImage, RGBDImage, Tensor]:
     """normalize two rgb-d image with tar.pose"""

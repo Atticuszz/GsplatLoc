@@ -1,10 +1,11 @@
+import kornia
 import numpy as np
 import torch
 from numpy.compat import long
 from numpy.typing import NDArray
 from torch import Tensor
-
-from ..utils import DEVICE, to_tensor
+import torch.nn.functional as F
+from ..utils import DEVICE, to_tensor, visualize_point_cloud
 
 
 class RGBDImage:
@@ -140,26 +141,10 @@ class RGBDImage:
         points: Tensor
             The generated point cloud, shape=(h*w, 3) or (h*w, 4).
         """
-        h, w = self.depth.shape
-        i_indices, j_indices = torch.meshgrid(
-            torch.arange(h, device=DEVICE),
-            torch.arange(w, device=DEVICE),
-            indexing="ij",
-        )
-        x = (j_indices - self.K[0, 2]) * self.depth / self.K[0, 0]
-        y = (i_indices - self.K[1, 2]) * self.depth / self.K[1, 1]
-        z = self.depth
-
-        points = torch.stack((x, y, z), dim=-1)  # shape (h, w, 3)
-
+        points_3d = kornia.geometry.depth_to_3d_v2(self.depth, self.K).view(-1, 3)
         if include_homogeneous:
-            ones = torch.ones((h, w, 1), requires_grad=True, device=DEVICE)
-            points = torch.cat((points, ones), dim=-1)  # shape (h, w, 4)
-
-        # Flatten the points to shape (h*w, 3) or (h*w, 4)
-        points = points.reshape(-1, points.shape[-1])
-
-        return points
+            points_3d = F.pad(points_3d, (0, 1), value=1)
+        return points_3d
 
     def _color_pcds(
         self,

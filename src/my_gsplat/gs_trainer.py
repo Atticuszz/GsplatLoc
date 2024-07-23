@@ -88,6 +88,7 @@ class Runner(ExperimentBase):
             pbar = tqdm.tqdm(range(init_step, max_steps))
             for step in pbar:
                 # NOTE: Training loop.
+
                 global_tic = default_timer()
                 if not self.config.disable_viewer:
                     while self.config.viewer.state.status == "paused":
