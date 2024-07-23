@@ -1,8 +1,16 @@
 # CHANGELOG
 
+## v0.7.1 (2024-07-23)
+
+### Fix
+
+* fix: total_dataset eval should omit too close points and logger wrong best_records ([`e589830`](https://github.com/Atticuszz/AB_GICP/commit/e5898300b41c5bf265aed1d577f6b70a781266ea))
+
 ## v0.7.0 (2024-07-21)
 
 ### Chore
+
+* chore(release): bump version to v0.7.0 ([`6e72a8c`](https://github.com/Atticuszz/AB_GICP/commit/6e72a8ce2e710be851f4a675be9b609419654ae1))
 
 * chore: format train ([`afb8592`](https://github.com/Atticuszz/AB_GICP/commit/afb8592a1a83688122b8887356308cfb19fdcda7))
 
