@@ -1,11 +1,15 @@
 import kornia
 import numpy as np
-import torch
+import torch.nn.functional as F
 from numpy.compat import long
 from numpy.typing import NDArray
 from torch import Tensor
-import torch.nn.functional as F
-from ..utils import DEVICE, to_tensor, visualize_point_cloud
+
+from ..geometry import depth_to_points
+from ..utils import (
+    DEVICE,
+    to_tensor,
+)
 
 
 class RGBDImage:
@@ -30,7 +34,7 @@ class RGBDImage:
         depth: np.ndarray,
         K: np.ndarray,
         depth_scale: float,
-        pose: NDArray[np.float64],
+        pose: NDArray[np.float32],
     ):
         if rgb.shape[0] != depth.shape[0] or rgb.shape[1] != depth.shape[1]:
             raise ValueError(
@@ -39,20 +43,36 @@ class RGBDImage:
         self._rgb = to_tensor(rgb, device=DEVICE)
         self._depth = to_tensor(depth / depth_scale, device=DEVICE)
         self._K = to_tensor(K, device=DEVICE)
-
         self._pose = to_tensor(pose, device=DEVICE)
-        self._pcd = self._project_pcds(include_homogeneous=False)
+        self._pcd = depth_to_points(self._depth, self._K)
+
+        # NOTE: remove outliers
+        # self._pcd, inlier_mask = remove_outliers(self._pcd, verbose=True)
+        # self._colors = (self._rgb / 255.0).reshape(-1, 3)[inlier_mask]  # N,3
+
+        self._colors = (self._rgb / 255.0).reshape(-1, 3)  # N,3
+        # Adjust camera pose for normalized point cloud
 
     @property
     def size(self):
         return self._pcd.size(0)
 
     @property
-    def color(self) -> Tensor:
+    def colors(self) -> Tensor:
+        """
+        normed colors
+        Returns
+        -------
+        colors: Tensor[torch.float32], shape=(n, 3)
+        """
+        return self._colors
+
+    @property
+    def rgbs(self) -> Tensor:
         """
         Returns
         -------
-        color: Tensor[torch.float64], shape=(h, w, 3)
+        rgb: Tensor[torch.float32], shape=(h, w, 3)
         """
         return self._rgb
 
@@ -61,7 +81,7 @@ class RGBDImage:
         """
         Returns
         -------
-        depth: Tensor[torch.float64], shape=(h, w)
+        depth: Tensor[torch.float32], shape=(h, w)
             Depth image in meters.
         """
 
@@ -78,7 +98,7 @@ class RGBDImage:
         """
         Returns
         -------
-        K: Tensor[torch.float64], shape=(3, 3)
+        K: Tensor[torch.float32], shape=(3, 3)
             Camera intrinsic matrix.
         """
         return self._K
@@ -95,7 +115,7 @@ class RGBDImage:
         Returns
         -------
 
-        pose: Tensor[torch.float64] | None, shape=(4, 4)
+        pose: Tensor[torch.float32] | None, shape=(4, 4)
             Camera pose matrix in world coordinates.
         """
         return self._pose
@@ -141,7 +161,9 @@ class RGBDImage:
         points: Tensor
             The generated point cloud, shape=(h*w, 3) or (h*w, 4).
         """
-        points_3d = kornia.geometry.depth_to_3d_v2(self.depth, self.K).view(-1, 3)
+        points_3d = kornia.geometry.depth_to_3d_v2(
+            self.depth, self.K, normalize_points=True
+        ).view(-1, 3)
         if include_homogeneous:
             points_3d = F.pad(points_3d, (0, 1), value=1)
         return points_3d
@@ -150,7 +172,7 @@ class RGBDImage:
         self,
         colored: bool = False,  # Optional color image
         include_homogeneous: bool = True,
-    ) -> NDArray[np.float64]:
+    ) -> NDArray[np.float32]:
         """
         Generate point clouds from depth image, optionally with color.
 
@@ -163,7 +185,7 @@ class RGBDImage:
 
         Returns
         -------
-        NDArray[np.float64]
+        NDArray[np.float32]
             The generated point cloud, shape=(h*w, 4) or (h*w, 6) or (h*w, 3) or (h*w, 7) depending on options.
         """
         h, w = self._depth.shape[:2]
@@ -193,7 +215,7 @@ class RGBDImage:
 
     def _pointclouds(
         self, stride: int = 1, include_homogeneous=True
-    ) -> NDArray[np.float64]:
+    ) -> NDArray[np.float32]:
         """
         Generate point clouds from depth image.
         Parameters
@@ -202,7 +224,7 @@ class RGBDImage:
         include_homogeneous: bool, optional, whether to include homogeneous coordinate
         Returns
         -------
-        pcd: NDArray[np.float64], shape=(h*w, 4) or (h*w, 3)
+        pcd: NDArray[np.float32], shape=(h*w, 4) or (h*w, 3)
         """
         i_indices, j_indices, depth_downsampled = self._grid_downsample(stride)
         # Transform to camera coordinates
@@ -223,8 +245,8 @@ class RGBDImage:
     def _camera_to_world(
         self,
         c2w: np.ndarray,
-        pcd_c: NDArray[np.float64] | None = None,
-    ) -> NDArray[np.float64]:
+        pcd_c: NDArray[np.float32] | None = None,
+    ) -> NDArray[np.float32]:
         """
         Transform points from camera coordinates to world coordinates using the c2w matrix.
         :param c2w: 4x4 transformation matrix from camera to world coordinates
@@ -240,7 +262,7 @@ class RGBDImage:
     def _grid_downsample(self, stride: int = 1) -> tuple[
         NDArray[np.signedinteger | long],
         NDArray[np.signedinteger | long],
-        NDArray[np.float64],
+        NDArray[np.float32],
     ]:
         """
         Parameters
@@ -252,7 +274,7 @@ class RGBDImage:
             Pixel indices along the height axis.
         j_indices: NDArray[np.signedinteger | long], shape=(h, w)
             Pixel indices along the width axis.
-        depth_downsampled: NDArray[np.float64], shape=(h, w)
+        depth_downsampled: NDArray[np.float32], shape=(h, w)
             Downsampled depth image.
         """
         # Generate pixel indices

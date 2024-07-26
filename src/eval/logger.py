@@ -114,6 +114,9 @@ class WandbLogger:
         rastered_color: Tensor | None = None,
         color_loss: dict | None = None,
         silhouette_loss: dict | None = None,
+        normal: Tensor | None = None,  # New parameter for ground truth normal
+        rastered_normal: Tensor | None = None,  # New parameter for rastered normal
+        normal_loss: dict | None = None,  # New parameter for normal loss
         fig_title="RGBD Visualization",
     ):
         # Ensure depth tensors have a batch dimension
@@ -126,9 +129,9 @@ class WandbLogger:
 
         # Determine Plot Aspect Ratio
         aspect_ratio = depth.shape[2] / depth.shape[1]
-        fig_height = 8
+        fig_height = 12
         fig_width = aspect_ratio * 14 / 1.55
-        fig, axs = plt.subplots(2, 3, figsize=(fig_width, fig_height))
+        fig, axs = plt.subplots(3, 3, figsize=(fig_width, fig_height))
 
         if color is not None:
             if color.dim() == 3 and color.shape[1] == 3:  # (H, C, W)
@@ -185,6 +188,34 @@ class WandbLogger:
         diff_depth = torch.abs(depth - rastered_depth).detach().cpu()
         axs[1, 2].imshow(diff_depth.squeeze(), cmap="jet", vmin=0, vmax=6)
         axs[1, 2].set_title("Diff Depth L1")
+
+        # Add normal map visualization if provided
+        if normal is not None and rastered_normal is not None:
+            # Ensure normal tensors are in the correct shape (H, W, 3)
+            if normal.dim() == 4:
+                normal = normal.squeeze(0)
+            if rastered_normal.dim() == 4:
+                rastered_normal = rastered_normal.squeeze(0)
+
+            # Convert normal vectors to RGB
+            normal_rgb = (normal * 0.5 + 0.5).detach().cpu()
+            rastered_normal_rgb = (rastered_normal * 0.5 + 0.5).detach().cpu()
+
+            axs[2, 0].imshow(normal_rgb)
+            axs[2, 0].set_title("Ground Truth Normal")
+
+            axs[2, 1].imshow(rastered_normal_rgb)
+            if normal_loss is not None:
+                axs[2, 1].set_title(
+                    f"Rasterized Normal\n{normal_loss['type']}: {normal_loss['value']:.4f}"
+                )
+            else:
+                axs[2, 1].set_title("Rasterized Normal")
+
+            # Calculate and display normal difference
+            normal_diff = torch.abs(normal - rastered_normal).detach().cpu()
+            axs[2, 2].imshow(normal_diff, cmap="jet", vmin=0, vmax=1)
+            axs[2, 2].set_title("Normal Difference")
 
         for ax in axs.flatten():
             if ax.get_visible():

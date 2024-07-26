@@ -9,7 +9,10 @@ from ..geometry import compute_depth_gt, transform_points
 from ..utils import as_intrinsics_matrix, load_camera_cfg, to_tensor
 from .base import AlignData, TrainData
 from .Image import RGBDImage
-from .normalize import normalize_2C, normalize_T
+from .normalize import (
+    normalize_2C,
+    normalize_T,
+)
 
 
 class DataLoaderBase:
@@ -149,47 +152,49 @@ class Parser(Replica):
         # normalize points and pose
         self.normalize = normalize
 
-    def __len__(self) -> int:
-        return super().__len__() - 1
-
     def __getitem__(self, index: int) -> AlignData:
         assert index < len(self)
         tar, src = super().__getitem__(index), super().__getitem__(index + 1)
         # transform to world
         tar.points = transform_points(tar.pose, tar.points)
         src.points = transform_points(tar.pose, src.points)
-        scale_factor = torch.scalar_tensor(1.0, device=tar.points.device)
+
+        # NOTE: PCA
+        pca_factor = torch.scalar_tensor(1.0, device=tar.points.device)
         if self.normalize:
-            tar, src, scale_factor = normalize_2C(tar, src)
+
+            # NOTE: PCA
+            tar, src, pca_factor = normalize_2C(tar, src)
             ks = self.K.unsqueeze(0)  # [1, 3, 3]
             h, w = src.depth.shape
-            src_rgbs = (src.color / 255.0).reshape(-1, 3)
+
+            # # NOTE: normalize_points_spherical
+            # tar.points, _ = normalize_points_spherical(tar.points)
+            # src.points, sphere_factor = normalize_points_spherical(src.points)
+            # tar.pose = adjust_pose_spherical(tar.pose, _)
+            # src.pose = adjust_pose_spherical(src.pose, sphere_factor)
+
+            # NOTE: project depth
             src.depth = (
                 compute_depth_gt(
                     src.points,
-                    src_rgbs,
+                    src.colors,
                     ks,
                     c2w=tar.pose.unsqueeze(0),
                     height=h,
                     width=w,
                 )
-                / scale_factor
-            )
-        # scene_scale_normed = scene_scale([tar_normed, src_normed])
-        # combined
-        points = torch.cat([tar.points, src.points], dim=0)  # N,3
-        rgbs = torch.stack([tar.color / 255.0, src.color / 255.0], dim=0).reshape(
-            -1, 3
-        )  # N,3
-
+                # / pca_factor
+            )  # / sphere_factor
         return AlignData(
-            scale_factor=scale_factor,
-            colors=rgbs,
-            pixels=src.color / 255.0,
-            points=points,
+            pca_factor=pca_factor,
+            # sphere_factor=sphere_factor,
+            colors=src.colors,
+            pixels=src.rgbs / 255.0,
+            # points=points,
             tar_points=tar.points,
             src_points=src.points,
-            src_depth=src.depth,  # NOTE: depth need to be normalized
+            src_depth=src.depth,
             tar_c2w=tar.pose,
             src_c2w=src.pose,
             tar_nums=tar.points.shape[0],
@@ -212,11 +217,9 @@ class Parser2(Replica):
         assert index < len(self)
         tar = super().__getitem__(index)
 
-        rgbs = (tar.color / 255.0).reshape(-1, 3)  # N,3
-
         return TrainData(
-            colors=rgbs,
-            pixels=tar.color / 255.0,
+            colors=tar.colors,
+            pixels=tar.rgbs / 255.0,
             points=tar.points,
             depth=tar.depth,
             c2w=tar.pose,

@@ -80,7 +80,7 @@ class OptimizationConfig:
     lpips: LearnedPerceptualImagePatchSimilarity = None
 
     early_stop: bool = True
-    patience = 80
+    patience = 200
     best_eR = float("inf")
     best_eT = float("inf")
     best_loss = float("inf")
@@ -98,7 +98,8 @@ class OptimizationConfig:
 @dataclass
 class DepthLossConfig:
     depth_loss: bool = False
-    depth_lambda: float = 0.5
+    depth_lambda: float = 0.8
+    normal_lambda: float = 0.0
 
 
 @dataclass
@@ -177,14 +178,15 @@ class AlignData(TensorWrapper):
 
     colors: Tensor  # N,3
     pixels: Tensor  # H,W,3
-    points: Tensor  # N,3
+    # points: Tensor  # N,3
     tar_points: Tensor
     src_points: Tensor
     src_depth: Tensor
     tar_c2w: Tensor  # 4,4
     src_c2w: Tensor  # 4,4
     tar_nums: int  # for slice tar and src
-    scale_factor: Tensor  # for scale depth after rot normalized
+    # sphere_factor: Tensor  # for scale depth after rot normalized
+    pca_factor: Tensor
 
 
 @dataclass

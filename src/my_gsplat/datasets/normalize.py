@@ -1,8 +1,8 @@
 import torch
 from torch import Tensor
 
-from .Image import RGBDImage
 from .base import TrainData
+from .Image import RGBDImage
 
 
 @torch.no_grad()
@@ -187,38 +187,6 @@ def transform_cameras(
     return transformed, scaling
 
 
-@torch.no_grad()
-def normalize_dataset_slice(dataset_slice: list[RGBDImage]) -> list[RGBDImage]:
-    all_poses = [rgb_d.pose for rgb_d in dataset_slice]
-    # NOTE: transform to world,init with first pose
-    all_points = [transform_points(rgb_d.pose, rgb_d.points) for rgb_d in dataset_slice]
-    # all_points = [transform_points(all_poses[0], rgb_d.points) for rgb_d in dataset_slice]
-    # combine as one scene
-    poses = torch.stack(all_poses, dim=0)
-    points = torch.cat(all_points, dim=0)
-
-    # normalize
-    T1 = similarity_from_cameras(poses)
-    poses = transform_cameras(T1, poses)
-    points = transform_points(T1, points)
-
-    T2 = align_principle_axes(points)
-    poses = transform_cameras(T2, poses)
-    points = transform_points(T2, points)
-
-    # transform = T2 @ T1
-
-    # Update the original data with normalized values
-    start_idx = 0
-    for i, rgb_d in enumerate(dataset_slice):
-        num_points = len(rgb_d.points)
-        rgb_d.pose = poses[i]
-        rgb_d.points = points[start_idx : start_idx + num_points]
-        start_idx += num_points
-
-    return dataset_slice
-
-
 # @torch.compile
 @torch.no_grad()
 def normalize_2C(tar: RGBDImage, src: RGBDImage) -> tuple[RGBDImage, RGBDImage, Tensor]:
@@ -226,9 +194,10 @@ def normalize_2C(tar: RGBDImage, src: RGBDImage) -> tuple[RGBDImage, RGBDImage, 
     pose = tar.pose.unsqueeze(0)  # -> N,4,4
     # calculate tar points normalization transform
     points = tar.points
-    T1 = similarity_from_cameras(pose)
-    T2 = align_principle_axes(transform_points(T1, points))
-    transform = T2 @ T1
+    # T1 = similarity_from_cameras(pose)
+    # T2 = align_principle_axes(transform_points(T1, points))
+    # transform = T2 @ T1
+    transform = align_principle_axes(points)
 
     # apply transform
     tar.points = transform_points(transform, tar.points)
@@ -272,3 +241,25 @@ def scene_scale(dataset_slice: list[RGBDImage], global_scale: float = 1.0) -> fl
     scale = torch.max(dists)
 
     return scale.item() * 1.1 * global_scale
+
+
+def normalize_points_spherical(points: Tensor) -> tuple[Tensor, Tensor]:
+    max_dist = torch.max(torch.norm(points, dim=1))
+    scale_factor = 1.0 / max_dist
+    normalized_points = points * scale_factor
+    return normalized_points, scale_factor
+
+
+def adjust_pose_spherical(pose: torch.Tensor, scale_factor: Tensor) -> torch.Tensor:
+    """Adjust camera pose for normalized point cloud."""
+    R = pose[:3, :3]
+    t = pose[:3, 3]
+
+    # Scale the translation by the inverse of the scale factor
+    t_adjusted = t * scale_factor
+
+    adjusted_pose = torch.eye(4, device=pose.device, dtype=pose.dtype)
+    adjusted_pose[:3, :3] = R
+    adjusted_pose[:3, 3] = t_adjusted
+
+    return adjusted_pose

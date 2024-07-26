@@ -1,10 +1,12 @@
 import kornia
-import kornia.geometry as KG
+import numpy as np
+import small_gicp
 import torch
 import torch.nn.functional as F
 from gsplat import rasterization
 from torch import Tensor
 
+from .transform import rotation_matrix_to_quaternion
 from .utils import DEVICE, knn, rgb_to_sh, to_tensor
 
 
@@ -18,89 +20,6 @@ def construct_full_pose(rotation: Tensor, translation: Tensor):
     pose[:3, :3] = rotation
     pose[:3, 3] = translation
     return pose
-
-
-# @torch.compile
-def rotation_matrix_to_quaternion(rotation_matrix: Tensor) -> Tensor:
-    """
-    Convert a rotation matrix to a quaternion.
-
-    Parameters
-    ----------
-    rotation_matrix : torch.Tensor
-        The rotation matrix with dimensions [3, 3].
-
-    Returns
-    -------
-    torch.Tensor
-        The quaternion with dimensions [4].
-    """
-    return KG.rotation_matrix_to_quaternion(rotation_matrix)
-
-
-# # @torch.compile
-def rotation_6d_to_matrix(d6: Tensor) -> Tensor:
-    """
-    Converts 6D rotation representation by Zhou et al. [1] to rotation matrix
-    using Gram--Schmidt orthogonalization per Section B of [1]. Adapted from pytorch3d.
-    Args:
-        d6: 6D rotation representation, of size (*, 6)
-
-    Returns:
-        batch of rotation matrices of size (*, 3, 3)
-
-    [1] Zhou, Y., Barnes, C., Lu, J., Yang, J., & Li, H.
-    On the Continuity of Rotation Representations in Neural Networks.
-    IEEE Conference on Computer Vision and Pattern Recognition, 2019.
-    Retrieved from http://arxiv.org/abs/1812.07035
-    """
-
-    a1, a2 = d6[..., :3], d6[..., 3:]
-    b1 = F.normalize(a1, dim=-1)
-    b2 = a2 - (b1 * a2).sum(-1, keepdim=True) * b1
-    b2 = F.normalize(b2, dim=-1)
-    b3 = torch.cross(b1, b2, dim=-1)
-    return torch.stack((b1, b2, b3), dim=-2)
-
-
-# # @torch.compile
-def matrix_to_rotation_6d(matrix: torch.Tensor) -> torch.Tensor:
-    """
-    Converts rotation matrices to 6D rotation representation by Zhou et al. [1]
-    by dropping the last row. Note that 6D representation is not unique. Adapted from pytorch3d.
-    Args:
-        matrix: batch of rotation matrices of size (*, 3, 3)
-
-    Returns:
-        6D rotation representation, of size (*, 6)
-
-    [1] Zhou, Y., Barnes, C., Lu, J., Yang, J., & Li, H.
-    On the Continuity of Rotation Representations in Neural Networks.
-    IEEE Conference on Computer Vision and Pattern Recognition, 2019.
-    Retrieved from http://arxiv.org/abs/1812.07035
-    """
-    batch_dim = matrix.size()[:-2]
-    return matrix[..., :2, :].clone().reshape(batch_dim + (6,))
-
-
-# @torch.compile
-def quat_to_rotation_matrix(quaternion: Tensor) -> Tensor:
-    """
-    Convert a quaternion to a rotation matrix.
-
-    Parameters
-    ----------
-    quaternion : torch.Tensor
-        The quaternion with dimensions [4].
-
-    Returns
-    -------
-    torch.Tensor
-        The rotation matrix with dimensions [3, 3].
-    """
-
-    normalized_quaternion = quaternion / torch.norm(quaternion)
-    return KG.quaternion_to_rotation_matrix(normalized_quaternion)
 
 
 # @torch.compile
@@ -134,7 +53,6 @@ def compute_silhouette_diff(depth: Tensor, rastered_depth: Tensor) -> Tensor:
     return silhouette_diff
 
 
-# @torch.compile
 def transform_points(matrix: torch.Tensor, points: torch.Tensor) -> torch.Tensor:
     """
     Transform points using a SE(3) transformation matrix.
@@ -154,6 +72,194 @@ def transform_points(matrix: torch.Tensor, points: torch.Tensor) -> torch.Tensor
     assert matrix.shape == (4, 4)
     assert len(points.shape) == 2 and points.shape[1] == 3
     return torch.addmm(matrix[:3, 3], points, matrix[:3, :3].t())
+
+
+# def init_gs_scales(
+#     points: torch.Tensor, k: int = 20, min_scale: float = 1e-6, max_scale: float = 0.1
+# ):
+#     distances = knn(points, k)
+#     temp = distances.max()
+#     temp2 = distances.min()
+#     local_scales = torch.mean(distances[:, 1:], dim=1)  # 局部平均距离
+#
+#     # 将局部尺度限制在一个合理的范围内
+#     # local_scales = torch.clamp(local_scales, min_scale, max_scale)
+#
+#     return local_scales.unsqueeze(-1).repeat(1, 3)
+#     # 返回对数尺度
+#     # return torch.log(local_scales.unsqueeze(-1).repeat(1, 3))
+
+
+def estimate_covariances(points: Tensor, knn: int = 20, *, threads: int = 64):
+    """
+    Parameters
+    ----------
+    points: Tensor,shape=(N,3)
+    knn: int
+    threads: int
+
+    Returns
+    -------
+    covs: Tensor, shape=(n, 4, 4)
+    """
+    pcd = small_gicp.PointCloud(points.detach().cpu().numpy())
+    kdtree = small_gicp.KdTree(pcd, num_threads=threads)
+    small_gicp.estimate_covariances(pcd, kdtree, num_neighbors=knn, num_threads=threads)
+    covs = to_tensor(
+        np.array(pcd.covs(), dtype=np.float32),
+        device=points.device,
+    )
+    return covs
+
+
+def init_gaussian_parameters(
+    points: Tensor,
+    knn: int = 20,
+    depth_regularization_p: float = 1.0,
+    min_scale: float = 1e-5,
+    max_scale: float = 0.001,
+) -> tuple[Tensor, Tensor]:
+    """
+    Initialize Gaussian parameters (scales and quaternions) based on point cloud covariances.
+
+    Args:
+    points (Tensor): Input point cloud, shape (N, 3)
+    knn (int): Number of nearest neighbors for covariance estimation
+    depth_regularization_p (float): Power parameter for depth-based scale alignment
+    min_scale (float): Minimum scale value
+    max_scale (float): Maximum scale value
+
+    Returns:
+    tuple[Tensor, Tensor]: Initialized scales (shape N, 3) and quaternions (shape N, 4)
+    """
+    # Estimate covariances
+    covs = estimate_covariances(points, knn=knn)
+
+    # Perform eigendecomposition
+    eigenvalues, eigenvectors = torch.linalg.eigh(covs[:, :3, :3])
+
+    # Sort eigenvalues and eigenvectors in descending order
+    sorted_indices = torch.argsort(eigenvalues, dim=1, descending=True)
+    eigenvalues = torch.gather(eigenvalues, 1, sorted_indices)
+    eigenvectors = torch.gather(
+        eigenvectors, 2, sorted_indices.unsqueeze(1).expand(-1, 3, -1)
+    )
+
+    # Calculate initial scales (square root of eigenvalues)
+    scales = torch.sqrt(torch.clamp(eigenvalues, min=1e-10))
+
+    # Apply ellipsoid normalization
+    scales = ellipsoid_normalization(scales)
+
+    # Apply depth-based scale alignment
+    scales = depth_based_scale_alignment(scales, points, depth_regularization_p)
+
+    # Clamp scales to specified range
+    scales = torch.clamp(scales, min_scale, max_scale)
+
+    # Convert rotation matrices to quaternions
+    quats = rotation_matrix_to_quaternion(eigenvectors)
+
+    return scales, quats
+
+
+def ellipsoid_normalization(scales: Tensor) -> Tensor:
+    """
+    Apply ellipsoid normalization to scales.
+
+    Args:
+    scales (Tensor): Input scales, shape (N, 3)
+
+    Returns:
+    Tensor: Normalized scales, shape (N, 3)
+    """
+    # Calculate the median scale for each Gaussian
+    median_scales = torch.median(scales, dim=1, keepdim=True).values
+
+    # Normalize scales by dividing by the median
+    normalized_scales = scales / median_scales
+
+    return normalized_scales
+
+
+def depth_based_scale_alignment(scales: Tensor, points: Tensor, p: float) -> Tensor:
+    """
+    Apply depth-based scale alignment.
+
+    Args:
+    scales (Tensor): Input scales, shape (N, 3)
+    points (Tensor): Input points, shape (N, 3)
+    p (float): Power parameter for depth-based alignment
+
+    Returns:
+    Tensor: Aligned scales, shape (N, 3)
+    """
+    # Calculate depths (distances from origin)
+    depths = torch.norm(points, dim=1, keepdim=True)
+
+    # Align scales based on depth
+    aligned_scales = scales / (depths**p)
+
+    return aligned_scales
+
+
+#
+# def init_gs_scales(
+#     points: torch.Tensor,
+#     k: int = 2,
+# ) -> Tensor:
+#     """
+#     Parameters
+#     ----------
+#     points: tensor,shape(N,3)
+#     k:int
+#
+#     Returns
+#     -------
+#     scales:Tensor,shape(N,3)
+#     """
+#     dist2_avg = (knn(points, k)[:, 1:] ** 2).mean(dim=-1)
+#     dist_avg = torch.sqrt(dist2_avg)
+#     # scales = torch.log(dist_avg).unsqueeze(-1).repeat(1, 3)
+#     scales = dist_avg.unsqueeze(-1).repeat(1, 3)
+#     return scales
+
+
+def init_gs_scales(
+    points: torch.Tensor,
+    k: int = 5,
+    max_scale: float = 1e-6,
+    use_log: bool = True,
+    eps: float = 1e-6,
+) -> Tensor:
+    """
+    Initialize scales for Gaussian Splatting with safeguards against large scales.
+
+    Parameters
+    ----------
+    points: tensor, shape (N, 3)
+        Input point cloud
+    k: int
+        Number of nearest neighbors to consider
+    max_scale: float
+        Maximum allowed scale value
+    use_log: bool
+        Whether to use logarithmic scaling
+    eps: float
+        Small value to avoid log(0)
+
+    Returns
+    -------
+    scales: Tensor, shape (N, 3)
+        Initialized scales for each point
+    """
+    dist2_avg = (knn(points, k)[:, 1:] ** 2).mean(dim=-1)
+    # dist2_avg = (knn(points, k)[:, 1:] ** 2).median(dim=-1).values
+    dist_avg = torch.sqrt(dist2_avg)
+
+    scales = dist_avg.unsqueeze(-1).repeat(1, 3)
+
+    return scales
 
 
 @torch.no_grad()
@@ -189,12 +295,14 @@ def compute_depth_gt(
     )  # [N,]
     # NOTE: no deformation
     # Calculate distances for initial scale
-    dist2_avg = (knn(points, 4)[:, 1:] ** 2).mean(dim=-1)
-    dist_avg = torch.sqrt(dist2_avg)
-    scales = torch.log(dist_avg).unsqueeze(-1).repeat(1, 3)
+    # dist2_avg = (knn(points, 2)[:, 1:] ** 2).mean(dim=-1)
+    # dist_avg = torch.sqrt(dist2_avg)
+    # scales = torch.log(dist_avg).unsqueeze(-1).repeat(1, 3)
+    scales = init_gs_scales(points)
     quats = to_tensor([1, 0, 0, 0], device=points.device).repeat(
         points.shape[0], 1
     )  # [N, 4]
+    # scales, quats = init_gaussian_parameters(points)
 
     # # color is SH coefficients.
     sh_degree = 1
@@ -207,7 +315,8 @@ def compute_depth_gt(
     opacities = torch.sigmoid(opacities)
     colors = torch.cat([sh0, shN], 1)
     # colors = torch.sigmoid(self.colors)
-    scales = torch.exp(scales)
+    # scales = torch.exp(scales)
+    scales = scales
 
     render_colors, _, _ = rasterization(
         means=means3d,
@@ -228,3 +337,65 @@ def compute_depth_gt(
 
     depths = render_colors
     return depths.squeeze(0).squeeze(-1)
+
+
+def depth_to_points(
+    depth: Tensor,
+    K: Tensor,
+    include_homogeneous: bool = False,
+) -> Tensor:
+    """
+    Project depth map to point clouds using intrinsic matrix.
+
+    Parameters
+    ----------
+    depth: shape=(H,W)
+    K: shape=(4,4)
+    include_homogeneous: bool, optional
+        Whether to include the homogeneous coordinate (default True).
+
+    Returns
+    -------
+    points: Tensor
+        The generated point cloud, shape=(h*w, 3) or (h*w, 4).
+    """
+    points_3d = kornia.geometry.depth_to_3d_v2(depth, K).view(-1, 3)
+    if include_homogeneous:
+        points_3d = F.pad(points_3d, (0, 1), value=1)
+    return points_3d
+
+
+def depth_to_normal(depth: Tensor, K: Tensor) -> Tensor:
+    """
+    Convert depth map to normal map using the provided depth_to_points function.
+
+    Args:
+        depth (Tensor): Depth map of shape [H, W]
+        K (Tensor): Camera intrinsic matrix of shape [4, 4]
+
+    Returns:
+        Tensor: Normal map of shape [H, W, 3]
+    """
+    H, W = depth.shape
+
+    # Convert depth to 3D points
+    points = depth_to_points(depth, K)
+    points = points.view(H, W, 3)
+
+    # Add batch dimension
+    points = points.unsqueeze(0)  # Now shape is [1, H, W, 3]
+
+    # Compute gradients
+    # Use padding to handle border cases
+    points_padded = F.pad(points, (0, 0, 1, 1, 1, 1), mode="replicate")
+
+    dx = points_padded[:, 1:-1, 2:, :] - points_padded[:, 1:-1, :-2, :]
+    dy = points_padded[:, 2:, 1:-1, :] - points_padded[:, :-2, 1:-1, :]
+
+    # Compute normal vectors using cross product
+    normal = torch.cross(dx, dy, dim=-1)
+
+    # Normalize the normal vectors
+    normal = F.normalize(normal, p=2, dim=-1)
+
+    return normal.squeeze(0)

@@ -9,16 +9,15 @@ from gsplat import rasterization
 from torch import Tensor, nn
 from torch.optim import Adam, Optimizer, SparseAdam
 
-from .geometry import (
-    construct_full_pose,
+from .geometry import construct_full_pose, init_gs_scales
+from .transform import (
     matrix_to_rotation_6d,
     quat_to_rotation_matrix,
     rotation_6d_to_matrix,
     rotation_matrix_to_quaternion,
 )
-from .utils import (
+from .utils import (  # init_gs_scales,
     DEVICE,
-    knn,
     normalized_quat_to_rotmat,
     rgb_to_sh,
     to_tensor,
@@ -290,19 +289,16 @@ class GSModel(nn.Module):
         points = points
         rgbs = colors
 
-        # Calculate distances for initial scale
-        dist2_avg = (knn(points, 4)[:, 1:] ** 2).mean(dim=-1)
-        dist_avg = torch.sqrt(dist2_avg)
-        scales = torch.log(dist_avg).unsqueeze(-1).repeat(1, 3)
+        # visualize_point_cloud(points, rgbs)
 
         # Parameters
         self.means3d = points  # [N, 3]
-        # self.means3d = nn.Parameter(points)  # [N, 3]
-        self.scales = scales
         self.opacities = torch.logit(
             torch.full((points.shape[0],), self.config.init_opa, device=DEVICE)
         )
         # [N,]
+        # Calculate distances for initial scale
+        self.scales = init_gs_scales(points)
         # NOTE: no deformation
         self.quats = to_tensor([1, 0, 0, 0], requires_grad=True).repeat(
             points.shape[0], 1
@@ -333,9 +329,10 @@ class GSModel(nn.Module):
     ):
         assert self.means3d.shape[0] == self.opacities.shape[0]
         opacities = torch.sigmoid(self.opacities)
-        # colors = torch.cat([self.sh0, self.shN], 1)
-        colors = torch.sigmoid(self.colors)
-        scales = torch.exp(self.scales)
+        colors = torch.cat([self.sh0, self.shN], 1)
+        # colors = torch.sigmoid(self.colors)
+        scales = self.scales
+        # scales = torch.exp(self.scales)
 
         render_colors, render_alphas, info = rasterization(
             means=self.means3d,
@@ -343,7 +340,7 @@ class GSModel(nn.Module):
             scales=scales,
             opacities=opacities,
             colors=colors,
-            # sh_degree=self.config.sh_degree,
+            sh_degree=self.config.sh_degree,
             viewmats=torch.linalg.inv(camtoworlds),
             Ks=Ks,
             width=width,

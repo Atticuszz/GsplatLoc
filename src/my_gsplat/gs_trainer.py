@@ -9,7 +9,12 @@ from src.eval.experiment import ExperimentBase, WandbConfig
 
 from .datasets.base import Config
 from .datasets.dataset import AlignData, Parser
-from .loss import compute_depth_loss, compute_silhouette_loss
+from .geometry import depth_to_normal
+from .loss import (
+    compute_depth_loss,
+    compute_normal_consistency_loss,
+    compute_silhouette_loss,
+)
 from .model import (
     CameraOptModule_6d_inc_tans_inc,
     CameraOptModule_6d_tans,
@@ -55,7 +60,7 @@ class Runner(ExperimentBase):
         # torch.autograd.set_detect_anomaly(True)
         torch.set_float32_matmul_precision("high")
         # BUG: black area
-        for i, train_data in enumerate([self.parser[5]]):
+        for i, train_data in enumerate([self.parser[1875]]):
             # NOTE: train data loop
             train_data: AlignData
             height, width = train_data.pixels.shape[:2]
@@ -67,7 +72,7 @@ class Runner(ExperimentBase):
                 train_data.tar_points, train_data.colors[: train_data.tar_nums]
             ).to(DEVICE)
 
-            depths_gt = train_data.src_depth.unsqueeze(-1).unsqueeze(0)
+            depths_gt = train_data.src_depth
 
             # camera init with tar.pose
             camera_opt = self.camera_opt_module(train_data.tar_c2w).to(DEVICE)
@@ -109,60 +114,63 @@ class Runner(ExperimentBase):
                     Ks=Ks,  # [1, 3, 3],
                     width=width,
                     height=height,
-                    render_mode="ED",
+                    # render_mode="ED",
                 )
 
                 # assert renders.shape[-1] == 4
-                # colors, _depths = renders[..., 0:3], renders[..., 3:4]
-                _depths = renders
+                colors, _depths = renders[..., 0:3], renders[..., 3:4]
+                # _depths = renders
 
                 # scale depth after normalized
-                if self.parser.normalize:
-                    depths = _depths / train_data.scale_factor
-                else:
-                    depths = _depths
-
+                # if self.parser.normalize:
+                #     depths = (
+                #         _depths / train_data.sphere_factor
+                #     ) / train_data.pca_factor
+                # else:
+                #     depths = _depths / train_data.sphere_factor
+                depths = _depths
                 # NOTE:loss
                 # avoid nan area
                 non_zero_depth_mask = (depths != 0).float()
 
                 # RGB L1 Loss
-                # l1loss = F.l1_loss(
-                #     colors * non_zero_depth_mask,
-                #     pixels * non_zero_depth_mask,
-                #     reduction="sum",
-                # ) / (non_zero_depth_mask.sum() + 1e-8)
+                l1loss = F.l1_loss(
+                    colors * non_zero_depth_mask,
+                    pixels * non_zero_depth_mask,
+                    reduction="sum",
+                ) / (non_zero_depth_mask.sum() + 1e-8)
 
                 # SSIM Loss
-                # ssim_value = self.config.ssim(
-                #     (pixels * non_zero_depth_mask).permute(0, 3, 1, 2),
-                #     (colors * non_zero_depth_mask).permute(0, 3, 1, 2),
-                # )
-                # ssimloss = 1.0 - ssim_value
+                ssim_value = self.config.ssim(
+                    (pixels * non_zero_depth_mask).permute(0, 3, 1, 2),
+                    (colors * non_zero_depth_mask).permute(0, 3, 1, 2),
+                )
+                ssimloss = 1.0 - ssim_value
 
+                depths = (depths * non_zero_depth_mask).squeeze(-1).squeeze(0)
+                depths_gt = depths_gt * non_zero_depth_mask.squeeze(-1).squeeze(0)
                 # Depth Loss
                 depth_loss = compute_depth_loss(
-                    depths * non_zero_depth_mask,
-                    depths_gt * non_zero_depth_mask,
+                    depths,
+                    depths_gt,
                     loss_type="l1",
                 )
 
                 # Silhouette Loss
                 silhouette_loss = compute_silhouette_loss(
-                    (
-                        depths.squeeze(-1).squeeze(0)
-                        * non_zero_depth_mask.squeeze(-1).squeeze(0)
-                    ),
-                    (
-                        depths_gt.squeeze(-1).squeeze(0)
-                        * non_zero_depth_mask.squeeze(-1).squeeze(0)
-                    ),
+                    depths,
+                    depths_gt,
                     loss_type="l1",
                 )
-
+                normal_loss = compute_normal_consistency_loss(
+                    depths, depths_gt, K=Ks.squeeze(0), loss_type="cosine"
+                )
                 # Total Loss
-                total_loss = depth_loss * self.config.depth_lambda + silhouette_loss * (
-                    1 - self.config.depth_lambda
+                total_loss = (
+                    depth_loss * self.config.depth_lambda
+                    + normal_loss * self.config.normal_lambda
+                    + silhouette_loss
+                    * (1 - self.config.depth_lambda - self.config.normal_lambda)
                 )
 
                 total_loss.backward(retain_graph=True)
@@ -170,14 +178,20 @@ class Runner(ExperimentBase):
                 with torch.no_grad():
                     # loss
                     self.logger.log_loss("total_loss", total_loss.item(), step=step)
-                    # self.logger.log_loss(
-                    #     "pixels", l1loss.item(), step=step, l_type="l1"
-                    # )
-                    # self.logger.log_loss(
-                    #     "pixels", ssimloss.item(), step=step, l_type="ssim"
-                    # )
+                    self.logger.log_loss(
+                        "pixels", l1loss.item(), step=step, l_type="l1"
+                    )
+                    self.logger.log_loss(
+                        "pixels", ssimloss.item(), step=step, l_type="ssim"
+                    )
                     self.logger.log_loss(
                         "depth", depth_loss.item(), step=step, l_type="l1"
+                    )
+                    self.logger.log_loss(
+                        "normal_loss",
+                        normal_loss.item(),
+                        step=step,
+                        l_type="cosine",
                     )
                     self.logger.log_loss(
                         "silhouette_loss",
@@ -186,25 +200,31 @@ class Runner(ExperimentBase):
                         l_type="l1",
                     )
                     # IMAGE
-                    if step % 1 == 0:
-                        # psnr = self.config.psnr(
-                        #     (pixels * non_zero_depth_mask).permute(0, 3, 1, 2),
-                        #     (colors * non_zero_depth_mask).permute(0, 3, 1, 2),
-                        # )
+                    if step % 100 == 0:
+                        psnr = self.config.psnr(
+                            (pixels * non_zero_depth_mask).permute(0, 3, 1, 2),
+                            (colors * non_zero_depth_mask).permute(0, 3, 1, 2),
+                        )
                         self.logger.plot_rgbd(
-                            depths_gt.squeeze(-1).squeeze(0),
-                            depths.squeeze(-1).squeeze(0),
+                            depths_gt,
+                            depths,
                             # combined_projected_depth,
                             {
                                 "type": "l1",
                                 "value": depth_loss.item(),
                             },
-                            # color=train_data.pixels,
-                            # rastered_color=colors.squeeze(0),
-                            # color_loss={
-                            #     "type": "psnr",
-                            #     "value": psnr.item(),
-                            # },
+                            color=train_data.pixels,
+                            rastered_color=colors.squeeze(0),
+                            color_loss={
+                                "type": "psnr",
+                                "value": psnr.item(),
+                            },
+                            normal_loss={
+                                "type": "cosine",
+                                "value": normal_loss.item(),
+                            },
+                            normal=depth_to_normal(depths_gt, Ks.squeeze(0)),
+                            rastered_normal=depth_to_normal(depths, Ks.squeeze(0)),
                             step=step,
                             fig_title="gs_splats Visualization",
                         )
@@ -243,13 +263,14 @@ class Runner(ExperimentBase):
                         #     self.config.counter = 0  # 重置计数器
                         # else:
                         #     self.config.counter += 1
-                        if depth_loss.item() < self.config.best_loss:
-                            self.config.best_loss = depth_loss.item()
-                            self.config.best_eT = eT
-                            self.config.best_eR = eR
-                            self.config.counter = 0
-                        else:
-                            self.config.counter += 1
+                        if step > 50:
+                            if depth_loss.item() < self.config.best_loss:
+                                self.config.best_loss = depth_loss.item()
+                                self.config.best_eT = eT
+                                self.config.best_eR = eR
+                                self.config.counter = 0
+                            else:
+                                self.config.counter += 1
                         desc += f"best_eR:{self.config.best_eR}| best_eT: {self.config.best_eT}|"
                         pbar.set_description(desc)
                         if self.config.counter >= self.config.patience:

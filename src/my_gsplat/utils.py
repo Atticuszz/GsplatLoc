@@ -1,15 +1,15 @@
 import json
+import math
 import random
-from json import JSONEncoder
 from pathlib import Path
 
 import numpy as np
+import open3d as o3d
 import small_gicp
 import torch
 import yaml
 from numpy.typing import NDArray
 from torch import Tensor
-import open3d as o3d
 
 DEVICE = (
     "cuda"
@@ -101,6 +101,34 @@ def knn(x: Tensor, K: int = 4) -> Tensor:
     return to_tensor(distances, device=DEVICE, requires_grad=True)
 
 
+def remove_outliers(
+    points: torch.Tensor, k: int = 2, std_ratio: float = 5.0, verbose: bool = False
+) -> tuple[torch.Tensor, torch.Tensor]:
+    # Calculate distances for initial scale and outlier detection
+    distances = knn(points, k)
+    dist2_avg = (distances[:, 1:] ** 2).mean(dim=-1)
+    dist_avg = torch.sqrt(dist2_avg)
+
+    # Outlier detection
+    mean_dist = dist_avg.mean()
+    std_dist = dist_avg.std()
+    threshold = mean_dist + std_ratio * std_dist
+    inlier_mask = dist_avg < threshold
+
+    # Remove outliers
+    cleaned_points = points[inlier_mask]
+
+    if verbose:
+        num_original = len(points)
+        num_cleaned = len(cleaned_points)
+        percent_removed = (num_original - num_cleaned) / num_original * 100
+        print(f"Original points: {num_original}")
+        print(f"Points after cleaning: {num_cleaned}")
+        print(f"Percentage removed: {percent_removed:.2f}%")
+
+    return cleaned_points, inlier_mask
+
+
 def rgb_to_sh(rgb: Tensor) -> Tensor:
     C0 = 0.28209479177387814
     return (rgb - 0.5) / C0
@@ -158,14 +186,6 @@ def to_tensor(data, device=DEVICE, requires_grad=False, dtype=torch.float32):
     return data.requires_grad_(requires_grad)
 
 
-class CustomEncoder(JSONEncoder):
-    def default(self, obj):
-        try:
-            return super().default(obj)
-        except TypeError:
-            return str(obj)
-
-
 def calculate_translation_error(
     estimated_pose: torch.Tensor, true_pose: torch.Tensor
 ) -> float:
@@ -213,6 +233,64 @@ def calculate_rotation_error(
     # Convert radians to degrees manually
     rotation_error = (theta * 180 / torch.pi).item()
     return rotation_error
+
+
+def calculate_ate(
+    estimated_poses: list[torch.Tensor], true_poses: list[torch.Tensor]
+) -> float:
+    """
+    Calculate the Average Trajectory Error (ATE) for a sequence of poses.
+    ATE is defined as the root mean square of the translation errors.
+
+    Parameters
+    ----------
+    estimated_poses: list of torch.Tensor, each with shape=(4, 4)
+        List of estimated pose matrices
+    true_poses: list of torch.Tensor, each with shape=(4, 4)
+        List of true pose matrices
+
+    Returns
+    -------
+    ate: float
+        Average Trajectory Error (root mean square of translation errors)
+    """
+    squared_errors = []
+    for est_pose, true_pose in zip(estimated_poses, true_poses):
+        error = calculate_translation_error(est_pose, true_pose)
+        squared_errors.append(error**2)
+
+    mean_squared_error = sum(squared_errors) / len(squared_errors)
+    ate = math.sqrt(mean_squared_error)
+    return ate
+
+
+def calculate_rre(
+    estimated_poses: list[torch.Tensor], true_poses: list[torch.Tensor]
+) -> float:
+    """
+    Calculate the Root mean square Rotation Error (RRE) for a sequence of poses.
+
+    Parameters
+    ----------
+    estimated_poses: list of torch.Tensor, each with shape=(4, 4)
+        List of estimated pose matrices
+    true_poses: list of torch.Tensor, each with shape=(4, 4)
+        List of true pose matrices
+
+    Returns
+    -------
+    rre: float
+        Root mean square Rotation Error (in degrees)
+    """
+    squared_errors = []
+    for est_pose, true_pose in zip(estimated_poses, true_poses):
+        error = calculate_rotation_error(est_pose, true_pose)
+        error_rad = error * math.pi / 180  # Convert back to radians
+        squared_errors.append(error_rad**2)
+
+    mean_squared_error = sum(squared_errors) / len(squared_errors)
+    rre = math.sqrt(mean_squared_error)
+    return rre * 180 / math.pi  # Convert final result back to degrees
 
 
 def visualize_point_cloud(points: torch.Tensor, colors: torch.Tensor):
