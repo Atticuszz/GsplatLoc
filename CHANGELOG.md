@@ -1,6 +1,16 @@
 # CHANGELOG
 
+## v0.7.2 (2024-07-26)
+
+### Fix
+
+* fix: remove similarity_from_cameras ([`1b08cc0`](https://github.com/Atticuszz/AB_GICP/commit/1b08cc08368277ee2db5d6bbd7c3438470a6ef0b))
+
 ## v0.7.1 (2024-07-23)
+
+### Chore
+
+* chore(release): bump version to v0.7.1 ([`f468a50`](https://github.com/Atticuszz/AB_GICP/commit/f468a50035404c9737d0163c1325ed68513a610f))
 
 ### Fix
 
