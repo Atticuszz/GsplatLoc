@@ -1,6 +1,22 @@
 # CHANGELOG
 
+## v0.7.3 (2024-07-27)
+
+### Chore
+
+* chore: remove submoudules and clean files ([`c7afa5d`](https://github.com/Atticuszz/AB_GICP/commit/c7afa5de8f5d8c2c88d4bd9e294b11a145b71cbb))
+
+* chore: add submoudules ([`cf9a886`](https://github.com/Atticuszz/AB_GICP/commit/cf9a886ca7df556419b6e9e7c2bb1dc5ff755cac))
+
+### Fix
+
+* fix: add root to  system path ([`dcdd0c6`](https://github.com/Atticuszz/AB_GICP/commit/dcdd0c6af3dad9fb5cebc0fa071b88f936836f29))
+
 ## v0.7.2 (2024-07-26)
+
+### Chore
+
+* chore(release): bump version to v0.7.2 ([`8e355e4`](https://github.com/Atticuszz/AB_GICP/commit/8e355e4c476fc3976bd0862eda8bd1519888935c))
 
 ### Fix
 
