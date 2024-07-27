@@ -60,7 +60,7 @@ class Runner(ExperimentBase):
         # torch.autograd.set_detect_anomaly(True)
         torch.set_float32_matmul_precision("high")
         # BUG: black area
-        for i, train_data in enumerate([self.parser[1875]]):
+        for i, train_data in enumerate([self.parser[1888]]):
             # NOTE: train data loop
             train_data: AlignData
             height, width = train_data.pixels.shape[:2]
@@ -68,9 +68,7 @@ class Runner(ExperimentBase):
 
             max_steps = self.config.max_steps
             # NOTE: Models init with tar.points
-            gs_splats = GSModel(
-                train_data.tar_points, train_data.colors[: train_data.tar_nums]
-            ).to(DEVICE)
+            gs_splats = GSModel(train_data.tar_points, train_data.colors).to(DEVICE)
 
             depths_gt = train_data.src_depth
 
@@ -263,9 +261,9 @@ class Runner(ExperimentBase):
                         #     self.config.counter = 0  # 重置计数器
                         # else:
                         #     self.config.counter += 1
-                        if step > 50:
-                            if depth_loss.item() < self.config.best_loss:
-                                self.config.best_loss = depth_loss.item()
+                        if step > 100:
+                            if total_loss.item() < self.config.best_loss:
+                                self.config.best_loss = total_loss.item()
                                 self.config.best_eT = eT
                                 self.config.best_eR = eR
                                 self.config.counter = 0

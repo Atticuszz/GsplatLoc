@@ -1,15 +1,9 @@
-import kornia
 import numpy as np
-import torch.nn.functional as F
-from numpy.compat import long
 from numpy.typing import NDArray
 from torch import Tensor
 
 from ..geometry import depth_to_points
-from ..utils import (
-    DEVICE,
-    to_tensor,
-)
+from ..utils import DEVICE, remove_outliers, to_tensor
 
 
 class RGBDImage:
@@ -47,11 +41,10 @@ class RGBDImage:
         self._pcd = depth_to_points(self._depth, self._K)
 
         # NOTE: remove outliers
-        # self._pcd, inlier_mask = remove_outliers(self._pcd, verbose=True)
-        # self._colors = (self._rgb / 255.0).reshape(-1, 3)[inlier_mask]  # N,3
+        self._pcd, inlier_mask = remove_outliers(self._pcd, verbose=True)
+        self._colors = (self._rgb / 255.0).reshape(-1, 3)[inlier_mask]  # N,3
 
-        self._colors = (self._rgb / 255.0).reshape(-1, 3)  # N,3
-        # Adjust camera pose for normalized point cloud
+        # self._colors = (self._rgb / 255.0).reshape(-1, 3)  # N,3
 
     @property
     def size(self):
@@ -143,145 +136,3 @@ class RGBDImage:
                 "Points must be a 2-dimensional tensor with the second dimension of size 3."
             )
         self._pcd = new_points
-
-    def _project_pcds(
-        self,
-        include_homogeneous: bool = True,
-    ) -> Tensor:
-        """
-        Project depth map to point clouds using intrinsic matrix.
-
-        Parameters
-        ----------
-        include_homogeneous: bool, optional
-            Whether to include the homogeneous coordinate (default True).
-
-        Returns
-        -------
-        points: Tensor
-            The generated point cloud, shape=(h*w, 3) or (h*w, 4).
-        """
-        points_3d = kornia.geometry.depth_to_3d_v2(
-            self.depth, self.K, normalize_points=True
-        ).view(-1, 3)
-        if include_homogeneous:
-            points_3d = F.pad(points_3d, (0, 1), value=1)
-        return points_3d
-
-    def _color_pcds(
-        self,
-        colored: bool = False,  # Optional color image
-        include_homogeneous: bool = True,
-    ) -> NDArray[np.float32]:
-        """
-        Generate point clouds from depth image, optionally with color.
-
-        Parameters
-        ----------
-        colored: bool
-            if contain color
-        include_homogeneous : bool, optional
-            Whether to include homogeneous coordinate.
-
-        Returns
-        -------
-        NDArray[np.float32]
-            The generated point cloud, shape=(h*w, 4) or (h*w, 6) or (h*w, 3) or (h*w, 7) depending on options.
-        """
-        h, w = self._depth.shape[:2]
-        i_indices, j_indices = np.indices((h, w))
-
-        # Transform to camera coordinates using intrinsic matrix K
-        x = (j_indices - self._K[0, 2]) * self._depth / self._K[0, 0]
-        y = (i_indices - self._K[1, 2]) * self._depth / self._K[1, 1]
-        z = self._depth
-        points = np.stack((x, y, z), axis=-1)
-
-        # Handle the optional inclusion of the homogeneous coordinate
-        if include_homogeneous:
-            ones = np.ones((h, w, 1))
-            points = np.concatenate((points, ones), axis=-1)
-
-        # Flatten the array to make it N x (3 or 4)
-        points = points.reshape(-1, points.shape[-1])
-
-        # Handle the optional color image
-        if colored:
-            colors = self._rgb.reshape(-1, 3)  # Flatten the color array
-            # Stack the color coordinates with the points
-            points = np.concatenate((points, colors), axis=1)
-
-        return points
-
-    def _pointclouds(
-        self, stride: int = 1, include_homogeneous=True
-    ) -> NDArray[np.float32]:
-        """
-        Generate point clouds from depth image.
-        Parameters
-        ----------
-        stride: int, optional
-        include_homogeneous: bool, optional, whether to include homogeneous coordinate
-        Returns
-        -------
-        pcd: NDArray[np.float32], shape=(h*w, 4) or (h*w, 3)
-        """
-        i_indices, j_indices, depth_downsampled = self._grid_downsample(stride)
-        # Transform to camera coordinates
-        x = (j_indices - self._K[0, 2]) * depth_downsampled / self.K[0, 0]
-        y = (i_indices - self._K[1, 2]) * depth_downsampled / self.K[1, 1]
-        z = depth_downsampled
-
-        points = np.stack((x, y, z), axis=-1)
-
-        # Add homogeneous coordinate if requested
-        if include_homogeneous:
-            ones = np.ones((points.shape[0], points.shape[1], 1))
-            points_homogeneous = np.concatenate((points, ones), axis=-1)
-            return points_homogeneous.reshape(-1, 4)
-        else:
-            return points.reshape(-1, 3)
-
-    def _camera_to_world(
-        self,
-        c2w: np.ndarray,
-        pcd_c: NDArray[np.float32] | None = None,
-    ) -> NDArray[np.float32]:
-        """
-        Transform points from camera coordinates to world coordinates using the c2w matrix.
-        :param c2w: 4x4 transformation matrix from camera to world coordinates
-        :param pcd_c: Nx4 numpy array of 3D points in camera coordinates
-        :return: Nx4 numpy array of transformed 3D points in world coordinates
-        """
-        if pcd_c is None:
-            points_camera = self._pcd
-        else:
-            points_camera = pcd_c[:, :4]
-        return points_camera @ c2w.T
-
-    def _grid_downsample(self, stride: int = 1) -> tuple[
-        NDArray[np.signedinteger | long],
-        NDArray[np.signedinteger | long],
-        NDArray[np.float32],
-    ]:
-        """
-        Parameters
-        ----------
-        stride: int, optional
-        Returns
-        -------
-        i_indices: NDArray[np.signedinteger | long], shape=(h, w)
-            Pixel indices along the height axis.
-        j_indices: NDArray[np.signedinteger | long], shape=(h, w)
-            Pixel indices along the width axis.
-        depth_downsampled: NDArray[np.float32], shape=(h, w)
-            Downsampled depth image.
-        """
-        # Generate pixel indices
-        i_indices, j_indices = np.indices(self.depth.shape)
-        # Apply downsampling
-        return (
-            i_indices[::stride, ::stride],
-            j_indices[::stride, ::stride],
-            self._depth[::stride, ::stride],
-        )

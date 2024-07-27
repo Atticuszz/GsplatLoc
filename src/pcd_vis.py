@@ -6,10 +6,10 @@ from matplotlib import pyplot as plt
 
 from component import PcdVisualizer
 from component.tracker import Scan2ScanICP
+from src.my_gsplat.datasets.Image import RGBDImage
+from src.my_gsplat.structure import Replica
+from src.my_gsplat.utils import to_tensor
 from src.pose_estimation.depth_loss import train_model_with_adam
-from src.slam_data.dataset import Replica
-from src.slam_data.Image import RGBDImage
-from src.utils import to_tensor
 
 
 class PointCloudProcessor(Scan2ScanICP):

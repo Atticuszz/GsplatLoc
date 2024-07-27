@@ -1,0 +1,1 @@
+python /home/atticuszz/DevSpace/python/AB_GICP/thirdparty/gsplat/examples/simple_viewer.py --scene_grid 3 --ckpt /home/atticuszz/DevSpace/python/AB_GICP/src/results/Replica/ckpts/ckpt_199.pt  --backend gsplat

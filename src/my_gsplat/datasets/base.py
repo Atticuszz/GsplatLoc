@@ -60,27 +60,13 @@ class TrainingConfig:
 @dataclass
 class OptimizationConfig:
     ssim_lambda: float = 0.5
-    init_opa: float = 0.1
-    prune_opa: float = 0.005
-    grow_grad2d: float = 0.0002
-    grow_scale3d: float = 0.01
-    prune_scale3d: float = 0.1
-    sparse_grad: bool = False
-    packed: bool = False
-    absgrad: bool = False
-    antialiased: bool = False
-    random_bkgd: bool = False
-    # Degree of spherical harmonics
-    sh_degree: int = 3
-    # Turn on another SH degree every this steps
-    sh_degree_interval: int = 1000
 
     ssim: StructuralSimilarityIndexMeasure = None
     psnr: PeakSignalNoiseRatio = None
     lpips: LearnedPerceptualImagePatchSimilarity = None
 
     early_stop: bool = True
-    patience = 200
+    patience = 100
     best_eR = float("inf")
     best_eT = float("inf")
     best_loss = float("inf")
@@ -99,7 +85,7 @@ class OptimizationConfig:
 class DepthLossConfig:
     depth_loss: bool = False
     depth_lambda: float = 0.8
-    normal_lambda: float = 0.0
+    normal_lambda: float = 0.01
 
 
 @dataclass
@@ -135,7 +121,6 @@ class Config(
         self.eval_steps = [int(i * factor) for i in self.eval_steps]
         self.save_steps = [int(i * factor) for i in self.save_steps]
         self.max_steps = int(self.max_steps * factor)
-        self.sh_degree_interval = int(self.sh_degree_interval * factor)
         self.refine_start_iter = int(self.refine_start_iter * factor)
         self.refine_stop_iter = int(self.refine_stop_iter * factor)
         self.reset_every = int(self.reset_every * factor)

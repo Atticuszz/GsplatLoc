@@ -1,16 +1,12 @@
 import kornia
-import numpy as np
-import small_gicp
 import torch
 import torch.nn.functional as F
 from gsplat import rasterization
 from torch import Tensor
 
-from .transform import rotation_matrix_to_quaternion
 from .utils import DEVICE, knn, rgb_to_sh, to_tensor
 
 
-# @torch.compile
 def construct_full_pose(rotation: Tensor, translation: Tensor):
     """
     Constructs the full 4x4 transformation matrix from rotation and translation.
@@ -22,7 +18,6 @@ def construct_full_pose(rotation: Tensor, translation: Tensor):
     return pose
 
 
-# @torch.compile
 def compute_silhouette_diff(depth: Tensor, rastered_depth: Tensor) -> Tensor:
     """
     Compute the difference between the sobel edges of two depth images.
@@ -74,163 +69,9 @@ def transform_points(matrix: torch.Tensor, points: torch.Tensor) -> torch.Tensor
     return torch.addmm(matrix[:3, 3], points, matrix[:3, :3].t())
 
 
-# def init_gs_scales(
-#     points: torch.Tensor, k: int = 20, min_scale: float = 1e-6, max_scale: float = 0.1
-# ):
-#     distances = knn(points, k)
-#     temp = distances.max()
-#     temp2 = distances.min()
-#     local_scales = torch.mean(distances[:, 1:], dim=1)  # 局部平均距离
-#
-#     # 将局部尺度限制在一个合理的范围内
-#     # local_scales = torch.clamp(local_scales, min_scale, max_scale)
-#
-#     return local_scales.unsqueeze(-1).repeat(1, 3)
-#     # 返回对数尺度
-#     # return torch.log(local_scales.unsqueeze(-1).repeat(1, 3))
-
-
-def estimate_covariances(points: Tensor, knn: int = 20, *, threads: int = 64):
-    """
-    Parameters
-    ----------
-    points: Tensor,shape=(N,3)
-    knn: int
-    threads: int
-
-    Returns
-    -------
-    covs: Tensor, shape=(n, 4, 4)
-    """
-    pcd = small_gicp.PointCloud(points.detach().cpu().numpy())
-    kdtree = small_gicp.KdTree(pcd, num_threads=threads)
-    small_gicp.estimate_covariances(pcd, kdtree, num_neighbors=knn, num_threads=threads)
-    covs = to_tensor(
-        np.array(pcd.covs(), dtype=np.float32),
-        device=points.device,
-    )
-    return covs
-
-
-def init_gaussian_parameters(
-    points: Tensor,
-    knn: int = 20,
-    depth_regularization_p: float = 1.0,
-    min_scale: float = 1e-5,
-    max_scale: float = 0.001,
-) -> tuple[Tensor, Tensor]:
-    """
-    Initialize Gaussian parameters (scales and quaternions) based on point cloud covariances.
-
-    Args:
-    points (Tensor): Input point cloud, shape (N, 3)
-    knn (int): Number of nearest neighbors for covariance estimation
-    depth_regularization_p (float): Power parameter for depth-based scale alignment
-    min_scale (float): Minimum scale value
-    max_scale (float): Maximum scale value
-
-    Returns:
-    tuple[Tensor, Tensor]: Initialized scales (shape N, 3) and quaternions (shape N, 4)
-    """
-    # Estimate covariances
-    covs = estimate_covariances(points, knn=knn)
-
-    # Perform eigendecomposition
-    eigenvalues, eigenvectors = torch.linalg.eigh(covs[:, :3, :3])
-
-    # Sort eigenvalues and eigenvectors in descending order
-    sorted_indices = torch.argsort(eigenvalues, dim=1, descending=True)
-    eigenvalues = torch.gather(eigenvalues, 1, sorted_indices)
-    eigenvectors = torch.gather(
-        eigenvectors, 2, sorted_indices.unsqueeze(1).expand(-1, 3, -1)
-    )
-
-    # Calculate initial scales (square root of eigenvalues)
-    scales = torch.sqrt(torch.clamp(eigenvalues, min=1e-10))
-
-    # Apply ellipsoid normalization
-    scales = ellipsoid_normalization(scales)
-
-    # Apply depth-based scale alignment
-    scales = depth_based_scale_alignment(scales, points, depth_regularization_p)
-
-    # Clamp scales to specified range
-    scales = torch.clamp(scales, min_scale, max_scale)
-
-    # Convert rotation matrices to quaternions
-    quats = rotation_matrix_to_quaternion(eigenvectors)
-
-    return scales, quats
-
-
-def ellipsoid_normalization(scales: Tensor) -> Tensor:
-    """
-    Apply ellipsoid normalization to scales.
-
-    Args:
-    scales (Tensor): Input scales, shape (N, 3)
-
-    Returns:
-    Tensor: Normalized scales, shape (N, 3)
-    """
-    # Calculate the median scale for each Gaussian
-    median_scales = torch.median(scales, dim=1, keepdim=True).values
-
-    # Normalize scales by dividing by the median
-    normalized_scales = scales / median_scales
-
-    return normalized_scales
-
-
-def depth_based_scale_alignment(scales: Tensor, points: Tensor, p: float) -> Tensor:
-    """
-    Apply depth-based scale alignment.
-
-    Args:
-    scales (Tensor): Input scales, shape (N, 3)
-    points (Tensor): Input points, shape (N, 3)
-    p (float): Power parameter for depth-based alignment
-
-    Returns:
-    Tensor: Aligned scales, shape (N, 3)
-    """
-    # Calculate depths (distances from origin)
-    depths = torch.norm(points, dim=1, keepdim=True)
-
-    # Align scales based on depth
-    aligned_scales = scales / (depths**p)
-
-    return aligned_scales
-
-
-#
-# def init_gs_scales(
-#     points: torch.Tensor,
-#     k: int = 2,
-# ) -> Tensor:
-#     """
-#     Parameters
-#     ----------
-#     points: tensor,shape(N,3)
-#     k:int
-#
-#     Returns
-#     -------
-#     scales:Tensor,shape(N,3)
-#     """
-#     dist2_avg = (knn(points, k)[:, 1:] ** 2).mean(dim=-1)
-#     dist_avg = torch.sqrt(dist2_avg)
-#     # scales = torch.log(dist_avg).unsqueeze(-1).repeat(1, 3)
-#     scales = dist_avg.unsqueeze(-1).repeat(1, 3)
-#     return scales
-
-
 def init_gs_scales(
     points: torch.Tensor,
     k: int = 5,
-    max_scale: float = 1e-6,
-    use_log: bool = True,
-    eps: float = 1e-6,
 ) -> Tensor:
     """
     Initialize scales for Gaussian Splatting with safeguards against large scales.
@@ -241,12 +82,6 @@ def init_gs_scales(
         Input point cloud
     k: int
         Number of nearest neighbors to consider
-    max_scale: float
-        Maximum allowed scale value
-    use_log: bool
-        Whether to use logarithmic scaling
-    eps: float
-        Small value to avoid log(0)
 
     Returns
     -------
@@ -288,23 +123,16 @@ def compute_depth_gt(
     """
     # Parameters
     means3d = points  # [N, 3]
-    # self.means3d = nn.Parameter(points)  # [N, 3]
     init_opa = 1.0
     opacities = torch.logit(
         torch.full((points.shape[0],), init_opa, device=points.device)
     )  # [N,]
-    # NOTE: no deformation
-    # Calculate distances for initial scale
-    # dist2_avg = (knn(points, 2)[:, 1:] ** 2).mean(dim=-1)
-    # dist_avg = torch.sqrt(dist2_avg)
-    # scales = torch.log(dist_avg).unsqueeze(-1).repeat(1, 3)
     scales = init_gs_scales(points)
     quats = to_tensor([1, 0, 0, 0], device=points.device).repeat(
         points.shape[0], 1
     )  # [N, 4]
-    # scales, quats = init_gaussian_parameters(points)
 
-    # # color is SH coefficients.
+    # color is SH coefficients.
     sh_degree = 1
     colors = torch.zeros(
         (points.shape[0], (sh_degree + 1) ** 2, 3), device=DEVICE
@@ -316,7 +144,6 @@ def compute_depth_gt(
     colors = torch.cat([sh0, shN], 1)
     # colors = torch.sigmoid(self.colors)
     # scales = torch.exp(scales)
-    scales = scales
 
     render_colors, _, _ = rasterization(
         means=means3d,

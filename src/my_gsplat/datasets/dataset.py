@@ -9,10 +9,7 @@ from ..geometry import compute_depth_gt, transform_points
 from ..utils import as_intrinsics_matrix, load_camera_cfg, to_tensor
 from .base import AlignData, TrainData
 from .Image import RGBDImage
-from .normalize import (
-    normalize_2C,
-    normalize_T,
-)
+from .normalize import normalize_2C, normalize_T
 
 
 class DataLoaderBase:
@@ -71,8 +68,8 @@ class Replica(DataLoaderBase):
         self,
         name: str = "room0",
         *,
-        input_folder: Path = Path(__file__).parents[3] / "Datasets/Replica",
-        cfg_file: Path = Path(__file__).parents[3] / "Datasets/Replica/cam_params.json",
+        input_folder: Path = Path(__file__).parents[3] / "datasets/Replica",
+        cfg_file: Path = Path(__file__).parents[3] / "datasets/Replica/cam_params.json",
     ):
         self.name = name
         super().__init__((input_folder / name).as_posix(), cfg_file.as_posix())
@@ -188,10 +185,8 @@ class Parser(Replica):
             )  # / sphere_factor
         return AlignData(
             pca_factor=pca_factor,
-            # sphere_factor=sphere_factor,
-            colors=src.colors,
+            colors=tar.colors,
             pixels=src.rgbs / 255.0,
-            # points=points,
             tar_points=tar.points,
             src_points=src.points,
             src_depth=src.depth,

@@ -29,7 +29,7 @@ class PcdVisualizer:
             cy=intrinsic_matrix[1, 2] * view_scale,
         )
         self.camera_params.intrinsic = intrinsic
-        render_option = Path(__file__).parents[2] / "Datasets" / "render_option.json"
+        render_option = Path(__file__).parents[2] / "datasets" / "render_option.json"
         self.o3d_vis.get_render_option().load_from_json(render_option.as_posix())
 
     def update_render(

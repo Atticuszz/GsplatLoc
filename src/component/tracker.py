@@ -6,7 +6,7 @@ import small_gicp
 from numpy.typing import NDArray
 
 # from ..gicp.optimizer import lm_optimize
-from src.gicp.pcd import PointClouds
+from src.gicp.base import PointClouds
 
 # TODO: add registration base class and registration result class
 

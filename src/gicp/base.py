@@ -13,7 +13,7 @@ class PointClouds:
         pcd: NDArray[np.float64],
         # rgb: NDArray[np.float64],
         *,
-        threads: int = 32
+        threads: int = 32,
     ):
         # if pcd.shape[0] != rgb.shape[0]:
         #     raise ValueError("Point cloud and RGB must have the same number of points.")

@@ -102,7 +102,7 @@ def knn(x: Tensor, K: int = 4) -> Tensor:
 
 
 def remove_outliers(
-    points: torch.Tensor, k: int = 2, std_ratio: float = 5.0, verbose: bool = False
+    points: torch.Tensor, k: int = 10, std_ratio: float = 10.0, verbose: bool = False
 ) -> tuple[torch.Tensor, torch.Tensor]:
     # Calculate distances for initial scale and outlier detection
     distances = knn(points, k)
@@ -295,26 +295,28 @@ def calculate_rre(
 
 def visualize_point_cloud(points: torch.Tensor, colors: torch.Tensor):
     """
-    使用Open3D可视化点云数据。
+    Visualize point cloud data using Open3D.
 
-    参数:
-    points (torch.Tensor): 形状为(N, 3)的点坐标张量。
-    colors (torch.Tensor): 形状为(N, 3)的颜色张量，值范围在0到1之间。
+    Parameters:
+    points (torch.Tensor): Tensor of point coordinates with shape (N, 3).
+    colors (torch.Tensor): Tensor of colors with shape (N, 3), values range from 0 to 1.
 
     """
-    # 确保输入是正确的形状
-    assert points.shape[1] == 3, "点坐标应该是(N, 3)形状"
-    assert colors.shape[1] == 3, "颜色应该是(N, 3)形状"
-    assert points.shape[0] == colors.shape[0], "点和颜色的数量应该相同"
+    # Ensure input has correct shape
+    assert points.shape[1] == 3, "Point coordinates should have shape (N, 3)"
+    assert colors.shape[1] == 3, "Colors should have shape (N, 3)"
+    assert (
+        points.shape[0] == colors.shape[0]
+    ), "Number of points and colors should be the same"
 
-    # 转换为numpy数组
+    # Convert to numpy arrays
     points_np = points.detach().cpu().numpy()
     colors_np = colors.detach().cpu().numpy()
 
-    # 创建Open3D点云对象
+    # Create Open3D point cloud object
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points_np)
     pcd.colors = o3d.utility.Vector3dVector(colors_np)
 
-    # 可视化点云
+    # Visualize the point cloud
     o3d.visualization.draw_geometries([pcd])
