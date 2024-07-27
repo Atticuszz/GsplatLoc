@@ -1,7 +1,12 @@
+import sys
 import time
+from pathlib import Path
 
+ROOT = Path(__file__).parents[1].as_posix()
+sys.path.append(ROOT)
 from my_gsplat.gs_trainer_total import Runner
 from src.eval.experiment import WandbConfig
+
 
 # from my_gsplat.gs_trainer_total2 import Runner
 
