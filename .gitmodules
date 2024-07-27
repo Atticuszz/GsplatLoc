@@ -16,3 +16,6 @@
 [submodule "thirdparty/gaussian-opacity-fields"]
 	path = thirdparty/gaussian-opacity-fields
 	url = git@github.com:SupaVision/gaussian-opacity-fields.git
+[submodule "thirdparty/GS_ICP_SLAM"]
+	path = thirdparty/GS_ICP_SLAM
+	url = git@github.com:Lab-of-AI-and-Robotics/GS_ICP_SLAM.git
