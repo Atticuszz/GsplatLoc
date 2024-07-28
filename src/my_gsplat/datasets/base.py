@@ -85,7 +85,7 @@ class OptimizationConfig:
 class DepthLossConfig:
     depth_loss: bool = False
     depth_lambda: float = 0.8
-    normal_lambda: float = 0.01
+    normal_lambda: float = 0.00
 
 
 @dataclass
@@ -162,11 +162,11 @@ class AlignData(TensorWrapper):
     # for GS
 
     colors: Tensor  # N,3
-    pixels: Tensor  # H,W,3
+    pixels: Tensor  # [1, H, W, 3]
     # points: Tensor  # N,3
     tar_points: Tensor
     src_points: Tensor
-    src_depth: Tensor
+    src_depth: Tensor  # B,H,w,1
     tar_c2w: Tensor  # 4,4
     src_c2w: Tensor  # 4,4
     tar_nums: int  # for slice tar and src
@@ -185,7 +185,7 @@ class TrainData(TensorWrapper):
 
     depth: Tensor  # H,w
     c2w: Tensor  # 4,4
-
-    scale_factor: Tensor = torch.scalar_tensor(
+    c2w_gt: Tensor
+    pca_factor: Tensor = torch.scalar_tensor(
         1.0
     )  # for scale depth after rot normalized

@@ -186,10 +186,10 @@ class Parser(Replica):
         return AlignData(
             pca_factor=pca_factor,
             colors=tar.colors,
-            pixels=src.rgbs / 255.0,
+            pixels=(src.rgbs / 255.0).unsqueeze(0),  # [1, H, W, 3]
             tar_points=tar.points,
             src_points=src.points,
-            src_depth=src.depth,
+            src_depth=src.depth.unsqueeze(-1).unsqueeze(0),  # [1, H, W, 1]
             tar_c2w=tar.pose,
             src_c2w=src.pose,
             tar_nums=tar.points.shape[0],
@@ -201,8 +201,8 @@ class Parser2(Replica):
         super().__init__(name=name)
         self.K = to_tensor(self.K, requires_grad=True)
         # normalize points and pose
-        init_rgb_d: RGBDImage = super().__getitem__(500)
-
+        init_rgb_d: RGBDImage = super().__getitem__(0)
+        init_rgb_d.points = transform_points(init_rgb_d.pose, init_rgb_d.points)
         self.normalize_T = normalize_T(init_rgb_d) if normalize else None
 
     def __len__(self) -> int:
@@ -218,4 +218,5 @@ class Parser2(Replica):
             points=tar.points,
             depth=tar.depth,
             c2w=tar.pose,
+            c2w_gt=tar.pose,
         )

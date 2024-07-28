@@ -1,54 +1,56 @@
 from typing import Literal
 
 import kornia
-from kornia.losses import InverseDepthSmoothnessLoss
+
 from torch import Tensor
 from torch.nn import functional as F
 
 from src.my_gsplat.geometry import depth_to_normal
 
 
-# @torch.compile
 def compute_depth_loss(
-    depth_A: Tensor,
-    depth_B: Tensor,
-    *,
-    loss_type: Literal["l1", "mse", "InverseDepthSmoothnessLoss"] = "l1"
+    depth_A: Tensor, depth_B: Tensor, *, loss_type: Literal["l1", "mse"] = "l1"
 ) -> Tensor:
-    """Compute the mean squared error between two depth images."""
+    """
+    Compute the mean squared error between two depth images.
+    Parameters
+    ----------
+    depth_A: shape=(*,H,W,*)
+    depth_B: shape=(*,H,W,*)
+    loss_type: Literal["l1", "mse"]
 
+    Returns
+    -------
+    loss: Tensor
+    """
     if loss_type == "l1":
         return F.l1_loss(depth_A, depth_B)
     elif loss_type == "mse":
         return F.mse_loss(depth_A, depth_B)
-    elif loss_type == "InverseDepthSmoothnessLoss":
-        if depth_A.dim() == 2:
-            depth_A = depth_A.unsqueeze(0).unsqueeze(
-                0
-            )  # Reshape [H, W] to [1, 1, H, W]
-        if depth_B.dim() == 2:
-            depth_B = depth_B.unsqueeze(0).unsqueeze(
-                0
-            )  # Reshape [H, W] to [1, 1, H, W]
-        smooth = InverseDepthSmoothnessLoss()
-        return smooth(depth_A, depth_B)
     else:
         raise ValueError("Invalid loss type. Use 'mse' or 'l1'.")
 
 
-# @torch.compile
 def compute_silhouette_loss(
     depth_A: Tensor, depth_B: Tensor, *, loss_type: Literal["l1", "mse"] = "l1"
 ) -> Tensor:
-    """Compute the mean squared error between the sobel edges of two depth images."""
-    # Ensure the depth images have a batch dimension and a channel dimension
-    if depth_A.dim() == 2:
-        depth_A = depth_A.unsqueeze(0).unsqueeze(0)  # Reshape [H, W] to [1, 1, H, W]
-    if depth_B.dim() == 2:
-        depth_B = depth_B.unsqueeze(0).unsqueeze(0)  # Reshape [H, W] to [1, 1, H, W]
+    """
+    Compute the mean squared error between the sobel edges of two depth images.
+    Parameters
+    ----------
+    depth_A: shape=(B, H, W, 1)
+    depth_B: shape=(B, H, W, 1)
+    loss_type: Literal["l1", "mse"]
 
-    edge_A = kornia.filters.sobel(depth_A)
-    edge_B = kornia.filters.sobel(depth_B)
+    Returns
+    -------
+    loss: Tensor
+    """
+    # Ensure the depth images have a batch dimension and a channel dimension
+    assert depth_A.dim() == 4 and depth_B.dim() == 4
+    # kornia needs shape=(B,C,H,W)
+    edge_A = kornia.filters.sobel(depth_A.permute(0, 3, 1, 2))
+    edge_B = kornia.filters.sobel(depth_B.permute(0, 3, 1, 2))
 
     if loss_type == "l1":
         return F.l1_loss(edge_A, edge_B)

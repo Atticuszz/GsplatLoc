@@ -8,7 +8,11 @@ from src.eval.experiment import ExperimentBase, WandbConfig
 
 from .datasets.base import Config
 from .datasets.dataset import AlignData, Parser
-from .loss import compute_depth_loss, compute_silhouette_loss
+from .loss import (
+    compute_depth_loss,
+    compute_silhouette_loss,
+    compute_normal_consistency_loss,
+)
 from .model import (
     CameraOptModule_6d_inc_tans_inc,
     CameraOptModule_6d_tans,
@@ -53,20 +57,19 @@ class Runner(ExperimentBase):
     def train(self):
         # torch.autograd.set_detect_anomaly(True)
         torch.set_float32_matmul_precision("high")
-
+        Ks = self.parser.K.unsqueeze(0)  # [1, 3, 3]
         for i, train_data in enumerate(self.parser):
             if i >= 1998:
                 break
             # NOTE: train data loop
             train_data: AlignData
-            height, width = train_data.pixels.shape[:2]
-            Ks = self.parser.K.unsqueeze(0)  # [1, 3, 3]
+            height, width = train_data.pixels.shape[1:3]
 
             max_steps = self.config.max_steps
             # NOTE: Models init with tar.points
             gs_splats = GSModel(train_data.tar_points, train_data.colors).to(DEVICE)
 
-            depths_gt = train_data.src_depth.unsqueeze(-1).unsqueeze(0)
+            depths_gt = train_data.src_depth  # [1, H, W, 1]
 
             # camera init with tar.pose
             camera_opt = self.camera_opt_module(train_data.tar_c2w).to(DEVICE)
@@ -86,6 +89,8 @@ class Runner(ExperimentBase):
             init_step = 0
             pbar = tqdm.tqdm(range(init_step, max_steps))
             for step in pbar:
+                for optimizer in camera_opt.optimizers:
+                    optimizer.zero_grad(set_to_none=True)
                 # NOTE: Training loop.
                 global_tic = default_timer()
                 if not self.config.disable_viewer:
@@ -95,7 +100,7 @@ class Runner(ExperimentBase):
                     tic = default_timer()
 
                 # NOTE: start forward
-                pixels = train_data.pixels.unsqueeze(0)  # [1, H, W, 3]
+                pixels = train_data.pixels  # [1, H, W, 3]
                 num_train_rays_per_step = (
                     pixels.shape[0] * pixels.shape[1] * pixels.shape[2]
                 )
@@ -110,13 +115,12 @@ class Runner(ExperimentBase):
                 )
 
                 assert renders.shape[-1] == 4
-                colors, _depths = renders[..., 0:3], renders[..., 3:4]
+                colors, depths = renders[..., 0:3], renders[..., 3:4]
 
                 # scale depth after normalized
                 # if self.parser.normalize:
                 #     depths = _depths / train_data.sphere_factor
                 # else:
-                depths = _depths
 
                 # NOTE:loss
                 # avoid nan area
@@ -145,20 +149,19 @@ class Runner(ExperimentBase):
 
                 # Silhouette Loss
                 silhouette_loss = compute_silhouette_loss(
-                    (
-                        depths.squeeze(-1).squeeze(0)
-                        * non_zero_depth_mask.squeeze(-1).squeeze(0)
-                    ),
-                    (
-                        depths_gt.squeeze(-1).squeeze(0)
-                        * non_zero_depth_mask.squeeze(-1).squeeze(0)
-                    ),
+                    depths * non_zero_depth_mask,
+                    depths_gt * non_zero_depth_mask,
                     loss_type="l1",
                 )
-
+                # normal_loss = compute_normal_consistency_loss(
+                #     depths, depths_gt, K=Ks.squeeze(0), loss_type="cosine"
+                # )
                 # Total Loss
-                total_loss = depth_loss * self.config.depth_lambda + silhouette_loss * (
-                    1 - self.config.depth_lambda
+                total_loss = (
+                    depth_loss * self.config.depth_lambda
+                    # + normal_loss * self.config.normal_lambda
+                    + silhouette_loss
+                    * (1 - self.config.depth_lambda - self.config.normal_lambda)
                 )
 
                 total_loss.backward(retain_graph=True)
@@ -172,13 +175,13 @@ class Runner(ExperimentBase):
                     if self.config.early_stop:
                         # NOTE: monitor the pose error
                         eT = calculate_translation_error(
-                            cur_c2w.squeeze(-1).squeeze(0),
-                            train_data.src_c2w.squeeze(-1).squeeze(0),
+                            cur_c2w,
+                            train_data.src_c2w,
                         )
 
                         eR = calculate_rotation_error(
-                            cur_c2w.squeeze(-1).squeeze(0),
-                            train_data.src_c2w.squeeze(-1).squeeze(0),
+                            cur_c2w,
+                            train_data.src_c2w,
                         )
                         if step > 100:
                             if total_loss.item() < self.config.best_loss:
@@ -225,8 +228,8 @@ class Runner(ExperimentBase):
                             #     (colors * non_zero_depth_mask).permute(0, 3, 1, 2),
                             # )
                             self.logger.plot_rgbd(
-                                depths_gt.squeeze(-1).squeeze(0),
-                                depths.squeeze(-1).squeeze(0),
+                                depths_gt[0, :, :, 0],
+                                depths[0, :, :, 0],
                                 # combined_projected_depth,
                                 {
                                     "type": "l1",
@@ -272,12 +275,10 @@ class Runner(ExperimentBase):
                             )
 
                             pbar.set_description(desc)
-
                             break
 
                 for optimizer in camera_opt.optimizers:
                     optimizer.step()
-                    optimizer.zero_grad(set_to_none=True)
                 for scheduler in schedulers:
                     scheduler.step()
 

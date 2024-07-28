@@ -208,18 +208,15 @@ def apply_normalize_T(tar: TrainData, T: Tensor) -> None:
     # NOTE: must in world
     tar.points = transform_points(T, tar.points)
     normed_tar_pose, scale_factor = transform_cameras(T, tar.c2w.unsqueeze(0))
-    tar.pose = normed_tar_pose.squeeze(0)
-    tar.scale_factor = scale_factor
+    tar.c2w = normed_tar_pose.squeeze(0)
+    tar.pca_factor = scale_factor
 
 
 def normalize_T(tar: RGBDImage) -> Tensor:
     """normalize rgb-d image with PCA"""
-    pose = tar.pose.unsqueeze(0)  # -> N,4,4 pose in world
     # calculate tar points normalization transform
     points = tar.points
-    T1 = similarity_from_cameras(pose)
-    T2 = align_principle_axes(transform_points(T1, points))
-    transform = T2 @ T1
+    transform = align_principle_axes(points)
 
     return transform
 
