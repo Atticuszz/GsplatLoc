@@ -1,5 +1,5 @@
 import numpy as np
-from numpy._typing import NDArray
+from numpy.typing import NDArray
 
 
 def calculate_translation_error(
@@ -99,3 +99,12 @@ def diff_pcd_COM(pcd_1: NDArray[np.float64], pcd_2: NDArray[np.float64]) -> floa
     com2 = np.mean(pcd_2, axis=0)
     distance = np.linalg.norm(com1 - com2)
     return distance
+
+
+def calculate_RMSE(eT: NDArray) -> float:
+    """
+    Returns
+    -------
+    RMSE: float
+    """
+    return np.sqrt(np.mean(np.square(eT)))
