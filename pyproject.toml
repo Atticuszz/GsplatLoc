@@ -1,7 +1,7 @@
 
 [tool.poetry]
 name = "AB-GICP"
-version = "0.7.3"
+version = "0.7.4"
 description = ""
 authors = ["Atticuszz <1831768457@qq.com>"]
 readme = "README.md"

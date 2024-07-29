@@ -1,8 +1,20 @@
 # CHANGELOG
 
+## v0.7.4 (2024-07-29)
+
+### Chore
+
+* chore: Update README.md ([`59b7196`](https://github.com/Atticuszz/AB_GICP/commit/59b71969f695bed0169b0a691ee164cf0a75ea84))
+
+### Fix
+
+* fix: sync_shape ([`0cb13f9`](https://github.com/Atticuszz/AB_GICP/commit/0cb13f9d072cefee4b4f330e6a322d099d26f539))
+
 ## v0.7.3 (2024-07-27)
 
 ### Chore
+
+* chore(release): bump version to v0.7.3 ([`9bc973a`](https://github.com/Atticuszz/AB_GICP/commit/9bc973acdf2eac798597d7397b721d477aae9552))
 
 * chore: remove submoudules and clean files ([`c7afa5d`](https://github.com/Atticuszz/AB_GICP/commit/c7afa5de8f5d8c2c88d4bd9e294b11a145b71cbb))
 
