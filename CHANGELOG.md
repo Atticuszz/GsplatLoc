@@ -1,8 +1,16 @@
 # CHANGELOG
 
+## v0.8.0 (2024-07-29)
+
+### Feature
+
+* feat: add plot rmse ([`7424edd`](https://github.com/Atticuszz/AB_GICP/commit/7424edd9b187afe31f4cb2e9fdb530711daa5991))
+
 ## v0.7.4 (2024-07-29)
 
 ### Chore
+
+* chore(release): bump version to v0.7.4 ([`0eef5e1`](https://github.com/Atticuszz/AB_GICP/commit/0eef5e1819274ded615547479d489eb5503087a4))
 
 * chore: Update README.md ([`59b7196`](https://github.com/Atticuszz/AB_GICP/commit/59b71969f695bed0169b0a691ee164cf0a75ea84))
 
