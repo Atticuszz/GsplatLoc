@@ -1,4 +1,4 @@
-## GSLoc-Slam
+## GsplatLoc
 [x] clean config in base.py
 1. tracking
    1. [x] normalize pcd and pose via PCA 
