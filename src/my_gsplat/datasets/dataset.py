@@ -7,9 +7,9 @@ from natsort import natsorted
 
 from ..geometry import compute_depth_gt, transform_points
 from ..utils import as_intrinsics_matrix, load_camera_cfg, to_tensor
-from .base import AlignData, TrainData
+from .base import AlignData
 from .Image import RGBDImage
-from .normalize import normalize_2C, normalize_T
+from .normalize import normalize_2C
 
 
 class DataLoaderBase:
@@ -165,24 +165,15 @@ class Parser(Replica):
             ks = self.K.unsqueeze(0)  # [1, 3, 3]
             h, w = src.depth.shape
 
-            # # NOTE: normalize_points_spherical
-            # tar.points, _ = normalize_points_spherical(tar.points)
-            # src.points, sphere_factor = normalize_points_spherical(src.points)
-            # tar.pose = adjust_pose_spherical(tar.pose, _)
-            # src.pose = adjust_pose_spherical(src.pose, sphere_factor)
-
             # NOTE: project depth
-            src.depth = (
-                compute_depth_gt(
-                    src.points,
-                    src.colors,
-                    ks,
-                    c2w=tar.pose.unsqueeze(0),
-                    height=h,
-                    width=w,
-                )
-                # / pca_factor
-            )  # / sphere_factor
+            src.depth = compute_depth_gt(
+                src.points,
+                src.colors,
+                ks,
+                c2w=tar.pose.unsqueeze(0),
+                height=h,
+                width=w,
+            )
         return AlignData(
             pca_factor=pca_factor,
             colors=tar.colors,
@@ -193,30 +184,4 @@ class Parser(Replica):
             tar_c2w=tar.pose,
             src_c2w=src.pose,
             tar_nums=tar.points.shape[0],
-        )
-
-
-class Parser2(Replica):
-    def __init__(self, name: str = "room0", normalize: bool = False):
-        super().__init__(name=name)
-        self.K = to_tensor(self.K, requires_grad=True)
-        # normalize points and pose
-        init_rgb_d: RGBDImage = super().__getitem__(0)
-        init_rgb_d.points = transform_points(init_rgb_d.pose, init_rgb_d.points)
-        self.normalize_T = normalize_T(init_rgb_d) if normalize else None
-
-    def __len__(self) -> int:
-        return super().__len__()
-
-    def __getitem__(self, index: int) -> TrainData:
-        assert index < len(self)
-        tar = super().__getitem__(index)
-
-        return TrainData(
-            colors=tar.colors,
-            pixels=tar.rgbs / 255.0,
-            points=tar.points,
-            depth=tar.depth,
-            c2w=tar.pose,
-            c2w_gt=tar.pose,
         )

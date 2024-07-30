@@ -1,7 +1,7 @@
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
-import pandas
+
 import torch
 from matplotlib import pyplot as plt
 from pandas import DataFrame
@@ -9,8 +9,8 @@ from torch import Tensor
 
 import wandb
 
-from .utils import calculate_RMSE
 from ..my_gsplat.geometry import compute_silhouette_diff
+from .utils import calculate_RMSE
 
 
 class WandbLogger:

@@ -41,7 +41,7 @@ class RGBDImage:
         self._pcd = depth_to_points(self._depth, self._K)
 
         # NOTE: remove outliers
-        self._pcd, inlier_mask = remove_outliers(self._pcd, verbose=True)
+        self._pcd, inlier_mask = remove_outliers(self._pcd, verbose=False)
         self._colors = (self._rgb / 255.0).reshape(-1, 3)[inlier_mask]  # N,3
 
         # self._colors = (self._rgb / 255.0).reshape(-1, 3)  # N,3

@@ -1,6 +1,5 @@
 from collections.abc import Callable
-from dataclasses import dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
 
 import torch
 from nerfview import Viewer
@@ -16,62 +15,25 @@ from ..utils import DEVICE
 
 
 @dataclass
-class DatasetConfig:
-    data_dir: str = "./data/360_v2/garden"
-    data_factor: int = 4
-    result_dir: str | Path = "./results/Replica"
-    test_every: int = 8
-    patch_size: int | None = None
-    global_scale: float = 1.0
-
-    # make_dir
-    res_dir: Path | None = None
-    stats_dir: Path | None = None
-    render_dir: Path | None = None
-    ckpt_dir: Path | None = None
-
-    def make_dir(self):
-        # Where to dump results.
-        self.res_dir = Path(self.result_dir)
-        self.res_dir.mkdir(exist_ok=True, parents=True)
-
-        # Setup output directories.
-        self.ckpt_dir = self.res_dir / "ckpts"
-        self.ckpt_dir.mkdir(exist_ok=True)
-        self.stats_dir = self.res_dir / "stats"
-        self.stats_dir.mkdir(exist_ok=True)
-        self.render_dir = self.res_dir / "renders"
-        self.render_dir.mkdir(exist_ok=True)
-
-
-@dataclass
-class TrainingConfig:
-    batch_size: int = 1
-    max_steps: int = 1000
-    eval_steps: list[int] = field(default_factory=lambda: [200, 30_000])
-    save_steps: list[int] = field(default_factory=lambda: [1000, 30_000])
-    steps_scaler: float = 1.0
-    refine_start_iter: int = 500
-    refine_stop_iter: int = 15_000
-    refine_every: int = 100
-    reset_every: int = 3000
-
-
-@dataclass
 class OptimizationConfig:
+    max_steps: int = 1000
+
     ssim_lambda: float = 0.5
+    depth_lambda: float = 0.8
+    normal_lambda: float = 0.0
 
     ssim: StructuralSimilarityIndexMeasure = None
     psnr: PeakSignalNoiseRatio = None
     lpips: LearnedPerceptualImagePatchSimilarity = None
 
     early_stop: bool = True
-    patience = 100
+    patience = 200
     best_eR = float("inf")
     best_eT = float("inf")
     best_loss = float("inf")
     best_depth_loss = float("inf")
     best_silhouette_loss = float("inf")
+    best_pose: Tensor = torch.eye(4)
 
     counter = 0
 
@@ -79,13 +41,6 @@ class OptimizationConfig:
         self.ssim = StructuralSimilarityIndexMeasure(data_range=1.0).to(DEVICE)
         self.psnr = PeakSignalNoiseRatio(data_range=1.0).to(DEVICE)
         self.lpips = LearnedPerceptualImagePatchSimilarity(normalize=True).to(DEVICE)
-
-
-@dataclass
-class DepthLossConfig:
-    depth_loss: bool = False
-    depth_lambda: float = 0.8
-    normal_lambda: float = 0.00
 
 
 @dataclass
@@ -109,22 +64,13 @@ class ViewerConfig:
 
 @dataclass
 class Config(
-    TrainingConfig,
-    DatasetConfig,
     OptimizationConfig,
-    DepthLossConfig,
     ViewerConfig,
 ):
     ckpt: str | None = None
 
     def adjust_steps(self, factor: float = 1.0):
-        self.eval_steps = [int(i * factor) for i in self.eval_steps]
-        self.save_steps = [int(i * factor) for i in self.save_steps]
         self.max_steps = int(self.max_steps * factor)
-        self.refine_start_iter = int(self.refine_start_iter * factor)
-        self.refine_stop_iter = int(self.refine_stop_iter * factor)
-        self.reset_every = int(self.reset_every * factor)
-        self.refine_every = int(self.refine_every * factor)
 
 
 @dataclass
@@ -181,11 +127,10 @@ class TrainData(TensorWrapper):
     # for GS
     points: Tensor  # N,3  in camera
     colors: Tensor  # N,3
-    pixels: Tensor  # H,W,3
+    pixels: Tensor  # [1, H, W, 3]
 
-    depth: Tensor  # H,w
+    depth: Tensor  # [1, H, W, 1]
     c2w: Tensor  # 4,4
-    c2w_gt: Tensor
     pca_factor: Tensor = torch.scalar_tensor(
         1.0
     )  # for scale depth after rot normalized

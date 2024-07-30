@@ -1,7 +1,6 @@
 from typing import Literal
 
 import kornia
-
 from torch import Tensor
 from torch.nn import functional as F
 

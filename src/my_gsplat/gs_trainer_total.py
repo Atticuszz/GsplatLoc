@@ -11,14 +11,8 @@ from .datasets.dataset import AlignData, Parser
 from .loss import (
     compute_depth_loss,
     compute_silhouette_loss,
-    compute_normal_consistency_loss,
 )
-from .model import (
-    CameraOptModule_6d_inc_tans_inc,
-    CameraOptModule_6d_tans,
-    CameraOptModule_quat_tans,
-    GSModel,
-)
+from .model import CameraOptModule_quat_tans, GSModel
 from .utils import (
     DEVICE,
     calculate_rotation_error,
@@ -41,16 +35,9 @@ class Runner(ExperimentBase):
         # Setup output directories.
 
         self.config = base_config
-        self.config.make_dir()
         # load data
         self.parser = Parser(self.sub_set, normalize=wandb_config.normalize)
 
-        cam_opt_dict = {
-            "quat": CameraOptModule_quat_tans,
-            "6d": CameraOptModule_6d_tans,
-            "6d+": CameraOptModule_6d_inc_tans_inc,
-        }
-        self.camera_opt_module = cam_opt_dict[extra_config["cam_opt"]]
         # Losses & Metrics.
         self.config.init_loss()
 
@@ -72,7 +59,7 @@ class Runner(ExperimentBase):
             depths_gt = train_data.src_depth  # [1, H, W, 1]
 
             # camera init with tar.pose
-            camera_opt = self.camera_opt_module(train_data.tar_c2w).to(DEVICE)
+            camera_opt = CameraOptModule_quat_tans(train_data.tar_c2w).to(DEVICE)
 
             schedulers = [
                 torch.optim.lr_scheduler.ExponentialLR(
@@ -89,8 +76,7 @@ class Runner(ExperimentBase):
             init_step = 0
             pbar = tqdm.tqdm(range(init_step, max_steps))
             for step in pbar:
-                for optimizer in camera_opt.optimizers:
-                    optimizer.zero_grad(set_to_none=True)
+                camera_opt.optimizer_clean()
                 # NOTE: Training loop.
                 global_tic = default_timer()
                 if not self.config.disable_viewer:
@@ -116,11 +102,6 @@ class Runner(ExperimentBase):
 
                 assert renders.shape[-1] == 4
                 colors, depths = renders[..., 0:3], renders[..., 3:4]
-
-                # scale depth after normalized
-                # if self.parser.normalize:
-                #     depths = _depths / train_data.sphere_factor
-                # else:
 
                 # NOTE:loss
                 # avoid nan area
@@ -154,7 +135,10 @@ class Runner(ExperimentBase):
                     loss_type="l1",
                 )
                 # normal_loss = compute_normal_consistency_loss(
-                #     depths, depths_gt, K=Ks.squeeze(0), loss_type="cosine"
+                #     (depths * non_zero_depth_mask)[0, :, :, 0],
+                #     (depths_gt * non_zero_depth_mask)[0, :, :, 0],
+                #     K=Ks.squeeze(0),
+                #     loss_type="cosine",
                 # )
                 # Total Loss
                 total_loss = (
@@ -277,8 +261,7 @@ class Runner(ExperimentBase):
                             pbar.set_description(desc)
                             break
 
-                for optimizer in camera_opt.optimizers:
-                    optimizer.step()
+                camera_opt.optimizer_step()
                 for scheduler in schedulers:
                     scheduler.step()
 

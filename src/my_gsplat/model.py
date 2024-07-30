@@ -1,67 +1,15 @@
-import math
 from dataclasses import dataclass
 
-import kornia
 import nerfview
 import torch
-import torch.nn.functional as F
 from gsplat import rasterization
+from kornia import geometry as KG
 from torch import Tensor, nn
-from torch.optim import Adam, Optimizer, SparseAdam
+from torch.optim import Adam, Optimizer
 
 from .geometry import construct_full_pose, init_gs_scales
-from .transform import (
-    matrix_to_rotation_6d,
-    quat_to_rotation_matrix,
-    rotation_6d_to_matrix,
-    rotation_matrix_to_quaternion,
-)
-from .utils import (  # init_gs_scales,
-    DEVICE,
-    normalized_quat_to_rotmat,
-    rgb_to_sh,
-    to_tensor,
-    visualize_point_cloud,
-)
-
-
-class _CameraOptModule(torch.nn.Module):
-    """Camera pose optimization module."""
-
-    def __init__(self, n: int):
-        super().__init__()
-        # Delta positions (3D) + Delta rotations (6D)
-        self.embeds = torch.nn.Embedding(n, 9)
-        # Identity rotation in 6D representation
-        self.register_buffer("identity", torch.tensor([1.0, 0.0, 0.0, 0.0, 1.0, 0.0]))
-
-    def zero_init(self):
-        torch.nn.init.zeros_(self.embeds.weight)
-
-    def random_init(self, std: float):
-        torch.nn.init.normal_(self.embeds.weight, std=std)
-
-    def forward(self, camtoworlds: Tensor, embed_ids: Tensor) -> Tensor:
-        """Adjust camera pose based on deltas.
-
-        Args:
-            camtoworlds: (..., 4, 4)
-            embed_ids: (...,)
-
-        Returns:
-            updated camtoworlds: (..., 4, 4)
-        """
-        assert camtoworlds.shape[:-2] == embed_ids.shape
-        batch_shape = camtoworlds.shape[:-2]
-        pose_deltas = self.embeds(embed_ids)  # (..., 9)
-        dx, drot = pose_deltas[..., :3], pose_deltas[..., 3:]
-        rot = rotation_6d_to_matrix(
-            drot + self.identity.expand(*batch_shape, -1)
-        )  # (..., 3, 3)
-        transform = torch.eye(4, device=pose_deltas.device).repeat((*batch_shape, 1, 1))
-        transform[..., :3, :3] = rot
-        transform[..., :3, 3] = dx
-        return torch.matmul(camtoworlds, transform)
+from .transform import quat_to_rotation_matrix, rotation_matrix_to_quaternion
+from .utils import DEVICE, rgb_to_sh, to_tensor
 
 
 # NOTE: to prevent to overwrite __hash__,which lead to failed to callmodule.named_parameters():
@@ -78,162 +26,73 @@ class CameraOptModule_quat_tans(nn.Module):
     def __init__(self, init_pose: Tensor, *, config: CameraConfig = CameraConfig()):
         super().__init__()
         self.config = config
-        self.c2w_start = init_pose
-        self.quaternion_cur = nn.Parameter(
-            rotation_matrix_to_quaternion(init_pose[:3, :3])
-        )
-        self.translation_cur = nn.Parameter(init_pose[:3, 3])
+
+        self.quat_cur = nn.Parameter(rotation_matrix_to_quaternion(init_pose[:3, :3]))
+        self.t_cur = nn.Parameter(init_pose[:3, 3])
+
+        # Add these lines to store previous poses
+        self.prev_quat = self.quat_cur.detach().clone()
+        self.prev_t = self.t_cur.detach().clone()
+
         self.optimizers = self._create_optimizers()
 
-    def forward(self) -> tuple[Tensor, Tensor]:
-        # def forward(self, points: Tensor) -> tuple[Tensor, Tensor]:
+    def update_pose(self, new_pose: Tensor | None = None):
         """
-
+        update pose with constant velocity model if new_pose is None
+        or update with best pose after a train loop
         Parameters
         ----------
-        points: src point ,N,3
-
-        Returns
-        -------
-            tuple[new_points,cur_c2w]
+        new_pose: Tensor|None, shape=(4,4)
         """
-        cur_rotation = quat_to_rotation_matrix(self.quaternion_cur)
-        cur_c2w = construct_full_pose(cur_rotation, self.translation_cur)
-        # transform_matrix = cur_c2w @ torch.linalg.inv(self.c2w_start)
-        # new_points = kornia.geometry.transform_points(
-        #     transform_matrix.unsqueeze(0), points
-        # )
-        return cur_c2w
-        # return new_points, cur_c2w
+        with torch.no_grad():
+            if torch.is_tensor(new_pose) and new_pose.shape == (4, 4):
+                self.quat_cur.data = rotation_matrix_to_quaternion(new_pose[:3, :3])
+                self.t_cur.data = new_pose[:3, 3]
+                self.optimizers = self._create_optimizers()
+            elif new_pose is None:
+                # update with constant velocity prediction
+                self.quat_cur.data, self.t_cur.data = self.predict_next_pose()
+            else:
+                raise ValueError("fake new pose")
 
-    def _create_optimizers(self) -> list[Optimizer]:
-        params = [
-            # name, value, lr
-            # ("means3d", self.means3d, self.lr_means3d),
-            ("quat", self.quaternion_cur, self.config.quat_lr),
-            ("trans", self.translation_cur, self.config.trans_lr),
-        ]
-        optimizers = [
-            Adam(
-                [
-                    {
-                        "params": param,
-                        "lr": lr,
-                        "name": name,
-                    }
-                ],
-                weight_decay=(
-                    self.config.quat_opt_reg
-                    if name == "quat"
-                    else self.config.trans_opt_reg
-                ),
-            )
-            for name, param, lr in params
-        ]
-        return optimizers
+    def predict_next_pose(self):
+        """before next loop call it to predict"""
+        # Implement constant velocity model for quaternions
+        quaternion_velocity = self.quat_cur - self.prev_quat
+        predicted_quaternion = KG.normalize_quaternion(
+            self.quat_cur + quaternion_velocity
+        )
 
+        # Implement constant velocity model for translation
+        translation_velocity = self.t_cur - self.prev_t
+        predicted_translation = self.t_cur + translation_velocity
 
-# NOTE: 6d + tans
-class CameraOptModule_6d_tans(nn.Module):
-    def __init__(self, init_pose: Tensor, *, config: CameraConfig = CameraConfig()):
-        super().__init__()
-        self.config = config
-        self.c2w_start = init_pose
-        self.rotation_6d = nn.Parameter(matrix_to_rotation_6d(init_pose[:3, :3]))
-        self.translation_cur = nn.Parameter(init_pose[:3, 3])
-        self.optimizers = self._create_optimizers()
+        # update pre pose
+        self.prev_quat, self.prev_t = (
+            self.quat_cur.detach().clone(),
+            self.t_cur.detach().clone(),
+        )
+        return predicted_quaternion, predicted_translation
 
     def forward(self) -> Tensor:
-        # def forward(self, points: Tensor) -> tuple[Tensor, Tensor]:
-        """
-
-        Parameters
-        ----------
-        points: src point ,N,3
-
-        Returns
-        -------
-            tuple[new_points,cur_c2w]
-        """
-        cur_rotation = rotation_6d_to_matrix(self.rotation_6d)
-        cur_c2w = construct_full_pose(cur_rotation, self.translation_cur)
-        # transform_matrix = cur_c2w @ torch.linalg.inv(self.c2w_start)
-        # new_points = transform_points(transform_matrix, points)
+        cur_rotation = quat_to_rotation_matrix(self.quat_cur)
+        cur_c2w = construct_full_pose(cur_rotation, self.t_cur)
         return cur_c2w
-        # return new_points, cur_c2w
+
+    def optimizer_step(self):
+        # Perform optimization step
+        for optimizer in self.optimizers:
+            optimizer.step()
+
+    def optimizer_clean(self):
+        for optimizer in self.optimizers:
+            optimizer.zero_grad(set_to_none=True)
 
     def _create_optimizers(self) -> list[Optimizer]:
         params = [
             # name, value, lr
-            ("rot_6d", self.rotation_6d, self.config.quat_lr),
-            ("trans", self.translation_cur, self.config.trans_lr),
-        ]
-        optimizers = [
-            Adam(
-                [
-                    {
-                        "params": param,
-                        "lr": lr,
-                        "name": name,
-                    }
-                ],
-                weight_decay=(
-                    self.config.quat_opt_reg
-                    if name == "quat"
-                    else self.config.trans_opt_reg
-                ),
-            )
-            for name, param, lr in params
-        ]
-        return optimizers
-
-
-# NOTE: 6d_inc, tans_inc
-class CameraOptModule_6d_inc_tans_inc(nn.Module):
-    def __init__(
-        self, init_pose: torch.Tensor, *, config: CameraConfig = CameraConfig()
-    ):
-        super().__init__()
-        self.config = config
-        self.c2w_start = init_pose
-
-        # Identity rotation in 6D representation
-        self.register_buffer(
-            "identity_rotation_6d", torch.tensor([1.0, 0.0, 0.0, 0.0, 1.0, 0.0])
-        )
-
-        # Initialize increments as zeros
-        self.rotation_6d_inc = nn.Parameter(torch.zeros(6))
-        self.translation_inc = nn.Parameter(torch.zeros(3))
-        self.optimizers = self._create_optimizers()
-
-    def forward(self) -> tuple[torch.Tensor, torch.Tensor]:
-        # def forward(self, points: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        # Adjust rotation increment by the identity rotation
-        adjusted_rotation_6d = self.rotation_6d_inc + self.identity_rotation_6d
-        rot_inc_matrix = rotation_6d_to_matrix(adjusted_rotation_6d)
-
-        # Apply increments to initial pose
-        init_rotation = self.c2w_start[:3, :3]
-        init_translation = self.c2w_start[:3, 3]
-
-        cur_rotation = rot_inc_matrix @ init_rotation
-        cur_translation = init_translation + self.translation_inc
-
-        cur_c2w = construct_full_pose(cur_rotation, cur_translation)
-        # transform_matrix = cur_c2w @ torch.linalg.inv(self.c2w_start)
-        #
-        # new_points = kornia.geometry.transform_points(
-        #     transform_matrix.unsqueeze(0), points
-        # )
-        return cur_c2w
-        # return new_points, cur_c2w
-
-    def _create_optimizers(self) -> list[Optimizer]:
-        params = [
-            # name, value, lr
-            ("rot_6d", self.rotation_6d_inc, self.config.quat_lr),
-            ("trans", self.translation_inc, self.config.trans_lr),
+            ("quat", self.quat_cur, self.config.quat_lr),
+            ("trans", self.t_cur, self.config.trans_lr),
         ]
         optimizers = [
             Adam(
@@ -281,11 +140,10 @@ class GSModel(nn.Module):
         *,
         # config
         config: GsConfig = GsConfig(),
-        batch_size: int = 1,
     ):
         super().__init__()
+        self.optimizers = None
         self.config = config
-        self.batch_size = batch_size
         points = points
         rgbs = colors
 
@@ -294,7 +152,7 @@ class GSModel(nn.Module):
         # Parameters
         self.means3d = points  # [N, 3]
         self.opacities = torch.logit(
-            torch.full((points.shape[0],), self.config.init_opa, device=DEVICE)
+            torch.full((points.shape[0],), self.config.init_opa, device=self.device)
         )
         # [N,]
         # Calculate distances for initial scale
@@ -307,14 +165,12 @@ class GSModel(nn.Module):
 
         # # color is SH coefficients.
         colors = torch.zeros(
-            (points.shape[0], (self.config.sh_degree + 1) ** 2, 3), device=DEVICE
+            (points.shape[0], (self.config.sh_degree + 1) ** 2, 3), device=self.device
         )  # [N, K, 3]
         colors[:, 0, :] = rgb_to_sh(rgbs)  # Initialize SH coefficients
         self.colors = rgbs
         self.sh0 = colors[:, :1, :]
         self.shN = colors[:, 1:, :]
-
-        # self.optimizers = self._create_optimizers()
 
     def __len__(self):
         return self.means3d.shape[0]
@@ -356,259 +212,9 @@ class GSModel(nn.Module):
 
         return render_colors, render_alphas, info
 
-    def _create_optimizers(self) -> list[Optimizer]:
-        params = [
-            ("scales", self.scales, self.lr_scales),
-            ("opacities", self.opacities, self.lr_opacities),
-            ("colors", self.colors, self.lr_colors),
-        ]
-
-        # if self.config.turn_on_light:
-        #     # params.append(("sh0", self.sh0, self.lr_sh0))
-        #     # params.append(("shN", self.shN, self.lr_shN))
-        #     # params.append(("means3d", self.means3d, self.lr_means3d))
-
-        optimizers = [
-            (SparseAdam if self.config.sparse_grad else Adam)(
-                [
-                    {
-                        "params": param,
-                        "lr": lr * math.sqrt(self.batch_size),
-                        "name": name,
-                    }
-                ],
-                eps=1e-15 / math.sqrt(self.batch_size),
-                betas=(
-                    1 - self.batch_size * (1 - 0.9),
-                    1 - self.batch_size * (1 - 0.999),
-                ),
-            )
-            for name, param, lr in params
-        ]
-
-        return optimizers
-
-    # NOTE: need test
-    def add_gaussians(
-        self,
-        color_image: Tensor,
-        depth_image: Tensor,
-        render_mask: Tensor,
-        Ks: Tensor,
-        camera_pose: Tensor,
-        threshold: float = 0.5,
-    ):
-        """
-        Add new Gaussian based on input images and camera parameters.
-
-        Parameters
-        ----------
-        color_image : Tensor
-            Normalized RGB image tensor of shape (H, W, 3).
-        depth_image : Tensor
-            Depth image tensor of shape (H, W).
-        render_mask : Tensor
-            Binary mask tensor of shape (H, W). 0 indicates areas where new points need to be added.
-        Ks : Tensor
-            Camera intrinsic matrix of shape (3, 3).
-        camera_pose : Tensor
-            Camera extrinsic matrix (camera-to-world transformation) of shape (4, 4).
-        threshold : float, optional
-            Threshold for determining whether to add new points, by default 0.5.
-
-        Returns
-        -------
-        None
-        """
-
-        # if to add
-        if (~render_mask).sum() / (render_mask.numel()) < threshold:
-
-            return
-        valid_mask = (depth_image.view(-1) > 0) & (~render_mask.view(-1))
-        print("adding new gs")
-        # depths project to world
-        points_3d = kornia.geometry.depth_to_3d_v2(depth_image, Ks)
-        points_3d_homogeneous = F.pad(points_3d.view(-1, 3), (0, 1), value=1)
-        world_coords = (camera_pose @ points_3d_homogeneous.T).T[:, :3]
-
-        new_points = world_coords[valid_mask]
-        new_colors = color_image.view(-1, 3)[valid_mask]
-
-        n_new = new_points.shape[0]
-        n_old = self.means3d.shape[0]
-        n_total = n_old + n_new
-        # Resize parameters
-        self.means3d = nn.Parameter(torch.cat([self.means3d, new_points], dim=0))
-
-        # append colors
-        self.colors = torch.cat([self.colors, new_colors.reshape(-1, 3)], dim=0)
-        new_colors_sh = torch.zeros(
-            (n_total, (self.config.sh_degree + 1) ** 2, 3), device=self.means3d.device
-        )
-        new_colors_sh[:, 0, :] = rgb_to_sh(self.colors)
-        # Update sh0 and shN
-        self.sh0 = new_colors_sh[:, :1, :]
-        self.shN = new_colors_sh[:, 1:, :]
-
-        # Repeat
-        new_scales = self.scales[-1].unsqueeze(0).repeat(n_new, 1)
-        self.scales = torch.cat([self.scales, new_scales], dim=0)
-
-        new_opacities = self.opacities[-1].repeat(n_new)
-        self.opacities = torch.cat([self.opacities, new_opacities], dim=0)
-
-        new_quats = self.quats[-1].unsqueeze(0).repeat(n_new, 1)
-        self.quats = torch.cat([self.quats, new_quats], dim=0)
-
-    @torch.no_grad()
-    def update_running_stats(self, info: dict):
-        """Update running stats."""
-
-        # normalize grads to [-1, 1] screen space
-        if self.config.absgrad:
-            grads = info["means2d"].absgrad.clone()
-        else:
-            grads = info["means2d"].grad.clone()
-        grads[..., 0] *= info["width"] / 2.0 * self.batch_size
-        grads[..., 1] *= info["height"] / 2.0 * self.batch_size
-        if self.config.packed:
-            # grads is [nnz, 2]
-            gs_ids = info["gaussian_ids"]  # [nnz] or None
-            self.running_stats["grad2d"].index_add_(0, gs_ids, grads.norm(dim=-1))
-            self.running_stats["count"].index_add_(
-                0, gs_ids, torch.ones_like(gs_ids).int()
-            )
-        else:
-            # grads is [C, N, 2]
-            sel = info["radii"] > 0.0  # [C, N]
-            gs_ids = torch.where(sel)[1]  # [nnz]
-            self.running_stats["grad2d"].index_add_(0, gs_ids, grads[sel].norm(dim=-1))
-            self.running_stats["count"].index_add_(
-                0, gs_ids, torch.ones_like(gs_ids).int()
-            )
-
-    @torch.no_grad()
-    def reset_opa(self, value: float = 0.01):
-        """Utility function to reset opacities."""
-        opacities = torch.clamp(
-            self.opacities, max=torch.logit(torch.tensor(value)).item()
-        )
-        for optimizer in self.optimizers:
-            for i, param_group in enumerate(optimizer.param_groups):
-                if param_group["name"] != "opacities":
-                    continue
-                p = param_group["params"][0]
-                p_state = optimizer.state[p]
-                del optimizer.state[p]
-                for key in p_state.keys():
-                    if key != "step":
-                        p_state[key] = torch.zeros_like(p_state[key])
-                p_new = torch.nn.Parameter(opacities)
-                optimizer.param_groups[i]["params"] = [p_new]
-                optimizer.state[p_new] = p_state
-                self.state_dict()[param_group["name"]] = p_new
-        torch.cuda.empty_cache()
-
-    @torch.no_grad()
-    def refine_split(self, mask: Tensor):
-        """Utility function to grow GSs."""
-        sel = torch.where(mask)[0]
-        rest = torch.where(~mask)[0]
-
-        scales = torch.exp(self.scales[sel])  # [N, 3]
-        quats = F.normalize(self.quats[sel], dim=-1)  # [N, 4]
-        # quats = F.normalize(self.splats["quats"][sel], dim=-1)  # [N, 4]
-        rotmats = normalized_quat_to_rotmat(quats)  # [N, 3, 3]
-        samples = torch.einsum(
-            "nij,nj,bnj->bni",
-            rotmats,
-            scales,
-            torch.randn(2, len(scales), 3, device=DEVICE),
-        )  # [2, N, 3]
-
-        for optimizer in self.optimizers:
-            for i, param_group in enumerate(optimizer.param_groups):
-                p = param_group["params"][0]
-                name = param_group["name"]
-                # create new params
-                if name == "means3d":
-                    p_split = (p[sel] + samples).reshape(-1, 3)  # [2N, 3]
-                elif name == "scales":
-                    p_split = torch.log(scales / 1.6).repeat(2, 1)  # [2N, 3]
-                else:
-                    repeats = [2] + [1] * (p.dim() - 1)
-                    p_split = p[sel].repeat(repeats)
-                p_new = torch.cat([p[rest], p_split])
-                p_new = torch.nn.Parameter(p_new)
-                # update optimizer
-                p_state = optimizer.state[p]
-                del optimizer.state[p]
-                for key in p_state.keys():
-                    if key == "step":
-                        continue
-                    v = p_state[key]
-                    # new params are assigned with zero optimizer states
-                    # (worth investigating it)
-                    v_split = torch.zeros((2 * len(sel), *v.shape[1:]), device=DEVICE)
-                    p_state[key] = torch.cat([v[rest], v_split])
-                optimizer.param_groups[i]["params"] = [p_new]
-                optimizer.state[p_new] = p_state
-                self.state_dict()[name] = p_new
-        for k, v in self.running_stats.items():
-            if v is None:
-                continue
-            repeats = [2] + [1] * (v.dim() - 1)
-            v_new = v[sel].repeat(repeats)
-            self.running_stats[k] = torch.cat((v[rest], v_new))
-        torch.cuda.empty_cache()
-
-    @torch.no_grad()
-    def refine_duplicate(self, mask: Tensor):
-        """Unility function to duplicate GSs."""
-        sel = torch.where(mask)[0]
-        for optimizer in self.optimizers:
-            for i, param_group in enumerate(optimizer.param_groups):
-                p = param_group["params"][0]
-                name = param_group["name"]
-                p_state = optimizer.state[p]
-                del optimizer.state[p]
-                for key in p_state.keys():
-                    if key != "step":
-                        # new params are assigned with zero optimizer states
-                        # (worth investigating it as it will lead to a lot more GS.)
-                        v = p_state[key]
-                        v_new = torch.zeros((len(sel), *v.shape[1:]), device=DEVICE)
-                        # v_new = v[sel]
-                        p_state[key] = torch.cat([v, v_new])
-                p_new = torch.nn.Parameter(torch.cat([p, p[sel]]))
-                optimizer.param_groups[i]["params"] = [p_new]
-                optimizer.state[p_new] = p_state
-                self.state_dict()[name] = p_new
-        for k, v in self.running_stats.items():
-            self.running_stats[k] = torch.cat((v, v[sel]))
-        torch.cuda.empty_cache()
-
-    @torch.no_grad()
-    def refine_keep(self, mask: Tensor):
-        """Unility function to prune GSs."""
-        sel = torch.where(mask)[0]
-        for optimizer in self.optimizers:
-            for i, param_group in enumerate(optimizer.param_groups):
-                p = param_group["params"][0]
-                name = param_group["name"]
-                p_state = optimizer.state[p]
-                del optimizer.state[p]
-                for key in p_state.keys():
-                    if key != "step":
-                        p_state[key] = p_state[key][sel]
-                p_new = torch.nn.Parameter(p[sel])
-                optimizer.param_groups[i]["params"] = [p_new]
-                optimizer.state[p_new] = p_state
-                self.state_dict()[name] = p_new
-        for k, v in self.running_stats.items():
-            self.running_stats[k] = v[sel]
-        torch.cuda.empty_cache()
+    @property
+    def device(self):
+        return self.means3d.device
 
     @torch.no_grad()
     def viewer_render_fn(
