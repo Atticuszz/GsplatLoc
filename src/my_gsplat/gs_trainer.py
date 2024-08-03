@@ -45,18 +45,17 @@ class Runner(ExperimentBase):
     def train(self):
         # torch.autograd.set_detect_anomaly(True)
         torch.set_float32_matmul_precision("high")
-        # BUG: black area
-        for i, train_data in enumerate([self.parser[329]]):
+        Ks = self.parser.K.unsqueeze(0)  # [1, 3, 3]
+        for i, train_data in enumerate([self.parser[533]]):
             # NOTE: train data loop
             train_data: AlignData
             height, width = train_data.pixels.shape[1:3]
-            Ks = self.parser.K.unsqueeze(0)  # [1, 3, 3]
 
             max_steps = self.config.max_steps
             # NOTE: Models init with tar.points
             gs_splats = GSModel(train_data.tar_points, train_data.colors).to(DEVICE)
 
-            depths_gt = train_data.src_depth
+            depths_gt = train_data.src_depth  # [1, H, W, 1]
 
             # camera init with tar.pose
             camera_opt = CameraOptModule_quat_tans(train_data.tar_c2w).to(DEVICE)
@@ -78,7 +77,6 @@ class Runner(ExperimentBase):
             for step in pbar:
                 camera_opt.optimizer_clean()
                 # NOTE: Training loop.
-
                 global_tic = default_timer()
                 if not self.config.disable_viewer:
                     while self.config.viewer.state.status == "paused":
@@ -87,7 +85,7 @@ class Runner(ExperimentBase):
                     tic = default_timer()
 
                 # NOTE: start forward
-                pixels = train_data.pixels.unsqueeze(0)  # [1, H, W, 3]
+                pixels = train_data.pixels  # [1, H, W, 3]
                 num_train_rays_per_step = (
                     pixels.shape[0] * pixels.shape[1] * pixels.shape[2]
                 )
@@ -102,7 +100,7 @@ class Runner(ExperimentBase):
                     # render_mode="ED",
                 )
 
-                # assert renders.shape[-1] == 4
+                assert renders.shape[-1] == 4
                 colors, depths = renders[..., 0:3], renders[..., 3:4]
 
                 # NOTE:loss
@@ -151,6 +149,7 @@ class Runner(ExperimentBase):
                 )
 
                 total_loss.backward(retain_graph=True)
+
                 # NOTE: logger
                 with torch.no_grad():
                     # loss
@@ -252,10 +251,7 @@ class Runner(ExperimentBase):
                             self.config.counter = 0
                             pbar.set_description(desc)
                             break
-
-                for optimizer in camera_opt.optimizers:
-                    optimizer.step()
-                    optimizer.zero_grad(set_to_none=True)
+                camera_opt.optimizer_step()
                 for scheduler in schedulers:
                     scheduler.step()
 
