@@ -272,8 +272,8 @@ class WandbLogger:
         assert len(histories) == len(_runs)
         return histories
 
-    def plot_RMSE(self):
-        histories = self.load_history()
+    def plot_RMSE(self, tags: str = "gsplatloc"):
+        histories = self.load_history(tags)
         ates = []
         ares = []
         scenes = []

@@ -1,6 +1,6 @@
 
 [tool.poetry]
-name = "AB-GICP"
+name = "GsplatLoc"
 version = "0.8.0"
 description = ""
 authors = ["Atticuszz <1831768457@qq.com>"]

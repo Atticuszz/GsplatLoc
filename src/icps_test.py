@@ -1,6 +1,10 @@
 import json
 from pathlib import Path
+import sys
+from pathlib import Path
 
+ROOT = Path(__file__).parents[1].as_posix()
+sys.path.append(ROOT)
 from src.eval.experiment import ICPExperiment, RegistrationConfig, WandbConfig
 
 
@@ -32,7 +36,10 @@ if __name__ == "__main__":
         "open3d",
     )
 
-    rooms = ["room" + str(i) for i in range(3)] + ["office" + str(i) for i in range(5)]
+    # rooms = ["room" + str(i) for i in range(2)]
+    # rooms = ["room" + str(i) for i in range(2,3)] + ["office" + str(i) for i in range(1)]
+    # rooms = ["office" + str(i) for i in range(1, 3)]
+    rooms = ["office" + str(i) for i in range(3,5)]
 
     finished = load_finished_experiments(file_path)
 
@@ -57,7 +64,7 @@ if __name__ == "__main__":
                         method,
                         sub_set=room,
                         implementation=imp,
-                        description="icps test for accuracy",
+                        description="icps_v2",
                     ),
                 )
                 experiment.run()

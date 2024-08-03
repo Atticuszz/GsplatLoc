@@ -5,38 +5,7 @@ import open3d as o3d
 import small_gicp
 from numpy.typing import NDArray
 
-# from ..gicp.optimizer import lm_optimize
 from src.gicp.base import PointClouds
-
-# TODO: add registration base class and registration result class
-
-
-class GICP:
-    def __init__(self):
-        self.previous_pcd: PointClouds | None = None
-        # every frame pose
-        self.T_world_camera = np.identity(4)  # World to camera transformation
-
-    def align_pcd_gt_pose(
-        self,
-        raw_points: NDArray[np.float64],
-        init_gt_pose: NDArray[np.float64] | None = None,
-        T_last_current: NDArray[np.float64] = np.identity(4),
-    ):
-        raw_points = PointClouds(raw_points, np.zeros_like(raw_points))
-        raw_points.preprocess(20)
-        # first frame
-        if self.previous_pcd is None:
-            self.previous_pcd = raw_points
-            self.T_world_camera = (
-                init_gt_pose if init_gt_pose is not None else np.identity(4)
-            )
-            return init_gt_pose
-
-        result = lm_optimize(T_last_current, self.previous_pcd, raw_points)
-        # Update the world transformation matrix
-        self.T_world_camera = self.T_world_camera @ result
-        return result
 
 
 class Scan2ScanICP:
@@ -256,7 +225,7 @@ class Scan2ScanICP:
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(raw_points[:, :3])  # 假设前三列是 XYZ
         if self.registration_type == "COLORED_ICP":
-            pcd.colors = o3d.utility.Vector3dVector(raw_points[:, 4:] / 255.0)
+            pcd.colors = o3d.utility.Vector3dVector(raw_points[:, 4:])
             # Compute normals for the point cloud, which are needed for GICP and Colored ICP
         pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamKNN(knn=knn))
 
