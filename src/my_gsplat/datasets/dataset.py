@@ -7,9 +7,9 @@ from natsort import natsorted
 
 from ..geometry import compute_depth_gt, transform_points
 from ..utils import as_intrinsics_matrix, load_camera_cfg, to_tensor
-from .base import AlignData
+from .base import AlignData, TrainData
 from .Image import RGBDImage
-from .normalize import normalize_2C
+from .normalize import normalize_2C, align_principle_axes, transform_cameras
 
 
 class BaseDataset:
@@ -166,13 +166,16 @@ class Parser(Replica):
             h, w = src.depth.shape
 
             # NOTE: project depth
-            src.depth = compute_depth_gt(
-                src.points,
-                src.colors,
-                ks,
-                c2w=tar.pose.unsqueeze(0),
-                height=h,
-                width=w,
+            src.depth = (
+                compute_depth_gt(
+                    src.points,
+                    src.colors,
+                    ks,
+                    c2w=tar.pose.unsqueeze(0),
+                    height=h,
+                    width=w,
+                )
+                / pca_factor
             )
         return AlignData(
             pca_factor=pca_factor,
@@ -185,43 +188,46 @@ class Parser(Replica):
             src_c2w=src.pose,
             tar_nums=tar.points.shape[0],
         )
-        
-        
-# TODO: on develop 
+
+
+# TODO: on develop
 class TUM_RGBD(BaseDataset):
     def __init__(self, dataset_config: dict):
         super().__init__(dataset_config)
         self.color_paths, self.depth_paths, self.poses = self.loadtum(
-            self.dataset_path, frame_rate=32)
+            self.dataset_path, frame_rate=32
+        )
 
     def parse_list(self, filepath, skiprows=0):
-        """ read list data """
-        return np.loadtxt(filepath, delimiter=' ', dtype=np.unicode_, skiprows=skiprows)
+        """read list data"""
+        return np.loadtxt(filepath, delimiter=" ", dtype=np.unicode_, skiprows=skiprows)
 
     def associate_frames(self, tstamp_image, tstamp_depth, tstamp_pose, max_dt=0.08):
-        """ pair images, depths, and poses """
+        """pair images, depths, and poses"""
         associations = []
         for i, t in enumerate(tstamp_image):
             if tstamp_pose is None:
                 j = np.argmin(np.abs(tstamp_depth - t))
-                if (np.abs(tstamp_depth[j] - t) < max_dt):
+                if np.abs(tstamp_depth[j] - t) < max_dt:
                     associations.append((i, j))
             else:
                 j = np.argmin(np.abs(tstamp_depth - t))
                 k = np.argmin(np.abs(tstamp_pose - t))
-                if (np.abs(tstamp_depth[j] - t) < max_dt) and (np.abs(tstamp_pose[k] - t) < max_dt):
+                if (np.abs(tstamp_depth[j] - t) < max_dt) and (
+                    np.abs(tstamp_pose[k] - t) < max_dt
+                ):
                     associations.append((i, j, k))
         return associations
 
     def loadtum(self, datapath, frame_rate=-1):
-        """ read video data in tum-rgbd format """
-        if os.path.isfile(os.path.join(datapath, 'groundtruth.txt')):
-            pose_list = os.path.join(datapath, 'groundtruth.txt')
-        elif os.path.isfile(os.path.join(datapath, 'pose.txt')):
-            pose_list = os.path.join(datapath, 'pose.txt')
+        """read video data in tum-rgbd format"""
+        if os.path.isfile(os.path.join(datapath, "groundtruth.txt")):
+            pose_list = os.path.join(datapath, "groundtruth.txt")
+        elif os.path.isfile(os.path.join(datapath, "pose.txt")):
+            pose_list = os.path.join(datapath, "pose.txt")
 
-        image_list = os.path.join(datapath, 'rgb.txt')
-        depth_list = os.path.join(datapath, 'depth.txt')
+        image_list = os.path.join(datapath, "rgb.txt")
+        depth_list = os.path.join(datapath, "depth.txt")
 
         image_data = self.parse_list(image_list)
         depth_data = self.parse_list(depth_list)
@@ -231,8 +237,7 @@ class TUM_RGBD(BaseDataset):
         tstamp_image = image_data[:, 0].astype(np.float64)
         tstamp_depth = depth_data[:, 0].astype(np.float64)
         tstamp_pose = pose_data[:, 0].astype(np.float64)
-        associations = self.associate_frames(
-            tstamp_image, tstamp_depth, tstamp_pose)
+        associations = self.associate_frames(tstamp_image, tstamp_depth, tstamp_pose)
 
         indicies = [0]
         for i in range(1, len(associations)):
@@ -252,13 +257,13 @@ class TUM_RGBD(BaseDataset):
                 inv_pose = np.linalg.inv(c2w)
                 c2w = np.eye(4)
             else:
-                c2w = inv_pose@c2w
+                c2w = inv_pose @ c2w
             poses += [c2w.astype(np.float32)]
 
         return images, depths, poses
 
     def pose_matrix_from_quaternion(self, pvec):
-        """ convert 4x4 pose matrix to (t, q) """
+        """convert 4x4 pose matrix to (t, q)"""
         from scipy.spatial.transform import Rotation
 
         pose = np.eye(4)
@@ -269,12 +274,10 @@ class TUM_RGBD(BaseDataset):
     def __getitem__(self, index):
         color_data = cv2.imread(str(self.color_paths[index]))
         if self.distortion is not None:
-            color_data = cv2.undistort(
-                color_data, self.intrinsics, self.distortion)
+            color_data = cv2.undistort(color_data, self.intrinsics, self.distortion)
         color_data = cv2.cvtColor(color_data, cv2.COLOR_BGR2RGB)
 
-        depth_data = cv2.imread(
-            str(self.depth_paths[index]), cv2.IMREAD_UNCHANGED)
+        depth_data = cv2.imread(str(self.depth_paths[index]), cv2.IMREAD_UNCHANGED)
         depth_data = depth_data.astype(np.float32) / self.depth_scale
         edge = self.crop_edge
         if edge > 0:

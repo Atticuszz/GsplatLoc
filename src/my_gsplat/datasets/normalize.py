@@ -107,12 +107,11 @@ def transform_cameras(
 @torch.no_grad()
 def normalize_2C(tar: RGBDImage, src: RGBDImage) -> tuple[RGBDImage, RGBDImage, Tensor]:
     # calculate tar points normalization transform
-    points = tar.points
-    transform = align_principle_axes(points)
+    transform = align_principle_axes(tar.points)
 
     # apply transform
     scale_factor = apply_normalize_T(tar, transform)
-    scale_factor = apply_normalize_T(src, transform)
+    _ = apply_normalize_T(src, transform)
 
     return tar, src, scale_factor
 

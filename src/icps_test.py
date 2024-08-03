@@ -32,14 +32,14 @@ if __name__ == "__main__":
         "ICP",
     ]
     implements = (
-        "small_gicp",
+        # "small_gicp",
         "open3d",
     )
 
     # rooms = ["room" + str(i) for i in range(2)]
     # rooms = ["room" + str(i) for i in range(2,3)] + ["office" + str(i) for i in range(1)]
     # rooms = ["office" + str(i) for i in range(1, 3)]
-    rooms = ["office" + str(i) for i in range(3,5)]
+    rooms = ["office" + str(i) for i in range(3, 5)]
 
     finished = load_finished_experiments(file_path)
 
@@ -64,7 +64,7 @@ if __name__ == "__main__":
                         method,
                         sub_set=room,
                         implementation=imp,
-                        description="icps_v2",
+                        description="icps_v3",
                     ),
                 )
                 experiment.run()

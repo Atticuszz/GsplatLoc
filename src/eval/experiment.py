@@ -80,7 +80,6 @@ class ICPExperiment(ExperimentBase):
         pre_pose = None
         for i, rgbd_image in enumerate(self.data):
 
-            
             # print(f"Processing image {i + 1}/{len(data)}...")
             rgbd_image: RGBDImage
             # convert tensors to numpy arrays
@@ -90,7 +89,8 @@ class ICPExperiment(ExperimentBase):
             pose_gt = rgbd_image.pose.cpu().numpy()
             if self.backends.registration_type == "COLORED_ICP":
                 new_pcd = np.concatenate(
-                    (rgbd_image.points.cpu().numpy(), rgbd_image.colors.cpu().numpy()), axis=1
+                    (rgbd_image.points.cpu().numpy(), rgbd_image.colors.cpu().numpy()),
+                    axis=1,
                 )
             else:
                 new_pcd = rgbd_image.points.cpu().numpy()
@@ -102,6 +102,7 @@ class ICPExperiment(ExperimentBase):
                 continue
             else:
                 T_last_current = pose_gt @ np.linalg.inv(pre_pose)
+                self.backends.T_world_camera = pre_pose
                 # res = self.backends.align(new_pcd, T_last_current, knn=self.knn)
                 res = self.backends.align(new_pcd, T_last_current)
 
@@ -123,6 +124,6 @@ class ICPExperiment(ExperimentBase):
             # # NOTE:COM
             # com = diff_pcd_COM(est_pcd, gt_pcd)
             # self.logger.log_com_diff(com, i)
-            if i >= max_images-1:
+            if i >= max_images - 1:
                 break
         self.logger.finish()

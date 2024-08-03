@@ -69,10 +69,7 @@ def transform_points(matrix: torch.Tensor, points: torch.Tensor) -> torch.Tensor
     return torch.addmm(matrix[:3, 3], points, matrix[:3, :3].t())
 
 
-def init_gs_scales(
-    points: torch.Tensor,
-    k: int = 5,
-) -> Tensor:
+def init_gs_scales(points: torch.Tensor, k: int = 5, eps: float = 1e-24) -> Tensor:
     """
     Initialize scales for Gaussian Splatting with safeguards against large scales.
 
@@ -90,7 +87,7 @@ def init_gs_scales(
     """
     dist2_avg = (knn(points, k)[:, 1:] ** 2).mean(dim=-1)
     # dist2_avg = (knn(points, k)[:, 1:] ** 2).median(dim=-1).values
-    dist_avg = torch.sqrt(dist2_avg)
+    dist_avg = torch.sqrt(dist2_avg + eps)
 
     scales = dist_avg.unsqueeze(-1).repeat(1, 3)
 
