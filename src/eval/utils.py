@@ -1,8 +1,11 @@
+import random
+
 import numpy as np
+import torch
 from numpy.typing import NDArray
 
 
-def calculate_translation_error(
+def calculate_translation_error_np(
     estimated_pose: NDArray[np.float64], true_pose: NDArray[np.float64]
 ) -> float:
     """
@@ -24,7 +27,7 @@ def calculate_translation_error(
     return translation_error
 
 
-def calculate_rotation_error(
+def calculate_rotation_error_np(
     estimated_pose: NDArray[np.float64], true_pose: NDArray[np.float64]
 ) -> float:
     """
@@ -54,7 +57,7 @@ def calculate_rotation_error(
     return rotation_error
 
 
-def calculate_pointcloud_rmse(
+def calculate_pointcloud_rmse_np(
     estimated_points: NDArray[np.float64], true_points: NDArray[np.float64]
 ) -> float:
     """
@@ -78,7 +81,7 @@ def calculate_pointcloud_rmse(
     return rmse
 
 
-def diff_pcd_COM(pcd_1: NDArray[np.float64], pcd_2: NDArray[np.float64]) -> float:
+def diff_pcd_COM_np(pcd_1: NDArray[np.float64], pcd_2: NDArray[np.float64]) -> float:
     """
     Calculate the difference in center of mass between two
     point clouds.
@@ -101,10 +104,65 @@ def diff_pcd_COM(pcd_1: NDArray[np.float64], pcd_2: NDArray[np.float64]) -> floa
     return distance
 
 
-def calculate_RMSE(eT: NDArray) -> float:
+def calculate_RMSE_np(eT: NDArray) -> float:
     """
     Returns
     -------
     RMSE: float
     """
     return np.sqrt(np.mean(np.square(eT)))
+
+
+def calculate_translation_error(
+    estimated_pose: torch.Tensor, true_pose: torch.Tensor
+) -> float:
+    """
+    Calculate the translation error between estimated pose and true pose using PyTorch.
+    Parameters
+    ----------
+    estimated_pose: torch.Tensor, shape=(4, 4)
+    true_pose: torch.Tensor, shape=(4, 4)
+
+    Returns
+    -------
+    translation_error: float
+    """
+    t_est = estimated_pose[:3, 3]
+    t_true = true_pose[:3, 3]
+    translation_error = torch.norm(t_est - t_true).item()
+    return translation_error
+
+
+def calculate_rotation_error(
+    estimated_pose: torch.Tensor, true_pose: torch.Tensor
+) -> float:
+    """
+    Calculate the rotation error between estimated pose and true pose using PyTorch.
+    Parameters
+    ----------
+    estimated_pose: torch.Tensor, shape=(4, 4)
+    true_pose: torch.Tensor, shape=(4, 4)
+
+    Returns
+    -------
+    rotation_error: float
+    """
+    R_est = estimated_pose[:3, :3]
+    R_true = true_pose[:3, :3]
+    delta_R = torch.mm(R_est, R_true.transpose(0, 1))
+    trace_value = torch.trace(delta_R)
+    cos_theta = (trace_value - 1) / 2
+    cos_theta = torch.clamp(
+        cos_theta, -1, 1
+    )  # # Ensure the value is within a valid range
+    theta = torch.acos(cos_theta)
+
+    # Convert radians to degrees manually
+    rotation_error = (theta * 180 / torch.pi).item()
+    return rotation_error
+
+
+def set_random_seed(seed: int):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)

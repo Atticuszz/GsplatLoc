@@ -7,9 +7,11 @@ from kornia import geometry as KG
 from torch import Tensor, nn
 from torch.optim import Adam, Optimizer
 
+from ..data.base import DEVICE
+from ..data.utils import to_tensor
 from .geometry import construct_full_pose, init_gs_scales
 from .transform import quat_to_rotation_matrix, rotation_matrix_to_quaternion
-from .utils import DEVICE, rgb_to_sh, to_tensor
+from .utils import rgb_to_sh
 
 
 # NOTE: to prevent to overwrite __hash__,which lead to failed to callmodule.named_parameters():

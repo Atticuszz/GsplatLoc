@@ -7,3 +7,6 @@
 [submodule "thirdparty/SplaTAM"]
 	path = thirdparty/SplaTAM
 	url = git@github.com:spla-tam/SplaTAM.git
+[submodule "thirdparty/Gaussian-SLAM"]
+	path = thirdparty/Gaussian-SLAM
+	url = git@github.com:VladimirYugay/Gaussian-SLAM.git

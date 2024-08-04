@@ -8,7 +8,7 @@
 
 import torch
 
-from src.pose_estimation import DEVICE
+from src.data.base import DEVICE
 
 print(torch.version.cuda)
 print(DEVICE)

@@ -4,10 +4,10 @@ from typing import Literal, NamedTuple
 import numpy as np
 
 from src.component import Scan2ScanICP
+from src.data.dataset import Replica
+from src.data.Image import RGBDImage
 from src.eval.logger import WandbLogger
-from src.eval.utils import calculate_rotation_error, calculate_translation_error
-from src.my_gsplat.datasets.Image import RGBDImage
-from src.my_gsplat.datasets.dataset import Replica
+from src.eval.utils import calculate_rotation_error_np, calculate_translation_error_np
 
 # from src.pose_estimation.train_eval import train_model_with_adam, train_model_with_LBFGS
 
@@ -111,10 +111,10 @@ class ICPExperiment(ExperimentBase):
             # self.logger.log_iter_times(res.iterations, i)
             # NOTE: eT
             est_pose = self.backends.T_world_camera
-            eT = calculate_translation_error(est_pose, pose_gt)
+            eT = calculate_translation_error_np(est_pose, pose_gt)
             self.logger.log_translation_error(eT, i)
             # NOTE:ER
-            eR = calculate_rotation_error(est_pose, pose_gt)
+            eR = calculate_rotation_error_np(est_pose, pose_gt)
             self.logger.log_rotation_error(eR, i)
             # # NOTE:RMSE
             # gt_pcd = rgbd_image.camera_to_world(rgbd_image.pose, new_pcd)

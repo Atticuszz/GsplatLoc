@@ -7,4 +7,8 @@
    4. [x] find an early stop condition !!! -> total loss and later than 100 step
    5. [x] sync data shape and avoid too much middle vars through backward
    6. [x] total dataset eval
-
+      1. [x] replica
+         1. [x]gsplatloc
+         2. [x]icps
+      2. TUM
+         

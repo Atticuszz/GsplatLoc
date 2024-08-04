@@ -4,22 +4,14 @@ from timeit import default_timer
 import torch
 import tqdm
 
+from src.data import AlignData, Parser
+from src.data.base import DEVICE, Config
 from src.eval.experiment import ExperimentBase, WandbConfig
 
-from .datasets.base import Config
-from .datasets.dataset import AlignData, Parser
+from ..eval.utils import calculate_rotation_error, calculate_translation_error
 from .geometry import depth_to_normal
-from .loss import (
-    compute_depth_loss,
-    compute_silhouette_loss,
-)
+from .loss import compute_depth_loss, compute_silhouette_loss
 from .model import CameraOptModule_quat_tans, GSModel
-from .utils import (
-    DEVICE,
-    calculate_rotation_error,
-    calculate_translation_error,
-    set_random_seed,
-)
 
 
 class Runner(ExperimentBase):
@@ -32,7 +24,7 @@ class Runner(ExperimentBase):
         extra_config: dict = None,
     ) -> None:
         super().__init__(wandb_config=wandb_config, extra_config=extra_config)
-        set_random_seed(42)
+
         # Setup output directories.
 
         self.config = base_config
@@ -254,28 +246,6 @@ class Runner(ExperimentBase):
                 camera_opt.optimizer_step()
                 for scheduler in schedulers:
                     scheduler.step()
-
-                # # save checkpoint
-                # if step in [i - 1 for i in self.save_steps] or step == max_steps - 1:
-                #     mem = torch.cuda.max_memory_allocated() / 1024**3
-                #     stats = {
-                #         "mem": mem,
-                #         "ellipse_time": time.time() - global_tic,
-                #         "num_GS": len(gs_splats),
-                #     }
-                #     print("Step: ", step, stats)
-                #     with open(f"{self.stats_dir}/train_step{step:04d}.json", "w") as f:
-                #         json.dump(stats, f)
-                #     torch.save(
-                #         {
-                #             "step": step,
-                #             "splats": gs_splats.state_dict(),
-                #         },
-                #         f"{self.ckpt_dir}/ckpt_{step}.pt",
-                #     )
-
-                # if step in [i - 1 for i in self.eval_steps] or step == max_steps - 1:
-                #     self.eval(gs_splats, cur_c2w, step)
 
                 # viewer
                 if not self.config.disable_viewer:

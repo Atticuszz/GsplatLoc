@@ -2,20 +2,11 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/thirdparty/GS_ICP_SLAM" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/thirdparty/GS_ICP_SLAM/submodules/diff-gaussian-rasterization" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/thirdparty/GS_ICP_SLAM/submodules/fast_gicp" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/thirdparty/GS_ICP_SLAM/submodules/simple-knn" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/datasets/TUM" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/thirdparty/Gaussian-SLAM" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/thirdparty/SplaTAM" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/thirdparty/SplaTAM/diff-gaussian-rasterization-w-depth.git" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/thirdparty/gaussian-opacity-fields" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/thirdparty/gsplat" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/thirdparty/gsplat/gsplat/cuda/csrc/third_party/glm" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/thirdparty/pixloc" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/thirdparty/small_gicp" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/thirdparty/torchimize" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/thirdparty/torchimize/docs/pytorch_sphinx_theme" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/../SplaTAM" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/../SplaTAM/diff-gaussian-rasterization-w-depth.git" vcs="Git" />
   </component>
 </project>

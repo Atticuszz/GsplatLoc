@@ -2,24 +2,15 @@ import numpy as np
 from numpy.typing import NDArray
 from torch import Tensor
 
-from ..geometry import depth_to_points
-from ..utils import DEVICE, remove_outliers, to_tensor
+from src.data.base import DEVICE
+from src.data.utils import to_tensor
+from src.my_gsplat.geometry import depth_to_points
+from src.my_gsplat.utils import remove_outliers
 
 
 class RGBDImage:
     """
     Initialize an RGBDImage with depth and camera intrinsic matrix, all as Tensors.
-
-    Parameters
-    ----------
-    depth: np.ndarray
-        The depth image as a numpy array.
-    K: np.ndarray
-        Camera intrinsic matrix as a numpy array.
-    depth_scale: float
-        Factor by which the depth values are scaled.
-    pose: np.ndarray | None, optional
-        Camera pose matrix in world coordinates as a numpy array.
     """
 
     def __init__(
@@ -27,7 +18,6 @@ class RGBDImage:
         rgb: np.ndarray,
         depth: np.ndarray,
         K: np.ndarray,
-        depth_scale: float,
         pose: NDArray[np.float32],
     ):
         if rgb.shape[0] != depth.shape[0] or rgb.shape[1] != depth.shape[1]:
@@ -35,7 +25,7 @@ class RGBDImage:
                 "RGB's height and width must match Depth's height and width."
             )
         self._rgb = to_tensor(rgb, device=DEVICE)
-        self._depth = to_tensor(depth / depth_scale, device=DEVICE)
+        self._depth = to_tensor(depth, device=DEVICE)
         self._K = to_tensor(K, device=DEVICE)
         self._pose = to_tensor(pose, device=DEVICE)
         self._pcd = depth_to_points(self._depth, self._K)
@@ -65,7 +55,7 @@ class RGBDImage:
         """
         Returns
         -------
-        rgb: Tensor[torch.float32], shape=(h, w, 3)
+            rgb: Tensor[torch.float32], shape=(h, w, 3)
         """
         return self._rgb
 

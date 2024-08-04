@@ -10,7 +10,7 @@ from torch import Tensor
 import wandb
 
 from ..my_gsplat.geometry import compute_silhouette_diff
-from .utils import calculate_RMSE
+from .utils import calculate_RMSE_np
 
 
 class WandbLogger:
@@ -181,7 +181,7 @@ class WandbLogger:
                 f"Rasterized RGB\n{color_loss['type']}: {color_loss['value']:.4f}"
             )
         else:
-            axs[1, 0].set_visible(False)  # 如果没有提供重建彩色图像则隐藏
+            axs[1, 0].set_visible(False)
 
         axs[1, 1].imshow(
             rastered_depth.squeeze().detach().cpu(), cmap="jet", vmin=0, vmax=6
@@ -282,8 +282,8 @@ class WandbLogger:
             scenes.append(scene)
             eT = his["Translation Error"].to_numpy()
             eR = his["Rotation Error"].to_numpy()
-            ates.append(calculate_RMSE(eT))
-            ares.append(calculate_RMSE(eR))
+            ates.append(calculate_RMSE_np(eT))
+            ares.append(calculate_RMSE_np(eR))
 
         self.plot_bar(
             "ATE of Replica",

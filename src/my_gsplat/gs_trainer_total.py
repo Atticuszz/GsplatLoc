@@ -4,21 +4,17 @@ from timeit import default_timer
 import torch
 import tqdm
 
+from src.data import AlignData, Parser
+from src.data.base import DEVICE, Config
 from src.eval.experiment import ExperimentBase, WandbConfig
 
-from .datasets.base import Config
-from .datasets.dataset import AlignData, Parser
-from .loss import (
-    compute_depth_loss,
-    compute_silhouette_loss,
-)
-from .model import CameraOptModule_quat_tans, GSModel
-from .utils import (
-    DEVICE,
+from ..eval.utils import (
     calculate_rotation_error,
     calculate_translation_error,
     set_random_seed,
 )
+from .loss import compute_depth_loss, compute_silhouette_loss
+from .model import CameraOptModule_quat_tans, GSModel
 
 
 class Runner(ExperimentBase):
@@ -35,8 +31,13 @@ class Runner(ExperimentBase):
         # Setup output directories.
 
         self.config = base_config
+        self.config.max_steps = wandb_config.num_iters
         # load data
-        self.parser = Parser(self.sub_set, normalize=wandb_config.normalize)
+        self.parser = Parser(
+            data_set=wandb_config.dataset,
+            name=self.sub_set,
+            normalize=wandb_config.normalize,
+        )
 
         # Losses & Metrics.
         self.config.init_loss()

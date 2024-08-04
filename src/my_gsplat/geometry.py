@@ -4,7 +4,9 @@ import torch.nn.functional as F
 from gsplat import rasterization
 from torch import Tensor
 
-from .utils import DEVICE, knn, rgb_to_sh, to_tensor
+from ..data.base import DEVICE
+from ..data.utils import to_tensor
+from .utils import knn, rgb_to_sh
 
 
 def construct_full_pose(rotation: Tensor, translation: Tensor):

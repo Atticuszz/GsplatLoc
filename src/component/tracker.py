@@ -5,8 +5,6 @@ import open3d as o3d
 import small_gicp
 from numpy.typing import NDArray
 
-from src.gicp.base import PointClouds
-
 
 class Scan2ScanICP:
     """
