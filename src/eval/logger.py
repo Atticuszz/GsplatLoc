@@ -3,11 +3,10 @@ from pathlib import Path
 from typing import Literal
 
 import torch
+import wandb
 from matplotlib import pyplot as plt
 from pandas import DataFrame
 from torch import Tensor
-
-import wandb
 
 from ..my_gsplat.geometry import compute_silhouette_diff
 from .utils import calculate_RMSE_np
