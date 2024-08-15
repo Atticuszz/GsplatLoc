@@ -8,10 +8,16 @@ import torch
 from natsort import natsorted
 
 from src.my_gsplat.geometry import compute_depth_gt, transform_points
+from thirdparty.gsplat.tests.test_strategy import device
 
-from .base import AlignData
+from .base import AlignData, TrainData
 from .Image import RGBDImage
-from .normalize import normalize_2C
+from .normalize import (
+    normalize_2C,
+    similarity_from_cameras,
+    transform_cameras,
+    align_principle_axes,
+)
 from .utils import as_intrinsics_matrix, load_camera_cfg, to_tensor
 
 
@@ -95,7 +101,7 @@ class Replica(BaseDataset):
         super().__init__((input_folder / name).as_posix(), cfg_file.as_posix())
         self._color_paths, self._depth_paths = self._filepaths()
         self._num_img = len(self._color_paths)
-        self._poses = self._load_poses()
+        self.poses = self._load_poses()
 
     def __str__(self):
         return f"Replica dataset: {self.name}\n in {self.input_folder}"
@@ -110,7 +116,7 @@ class Replica(BaseDataset):
         return RGBDImage(color, depth, self.K, pose)
 
     def _get_pose(self, index: int | None = None) -> np.ndarray:
-        pose = self._poses[index]
+        pose = self.poses[index]
         # pose[:3, 3] *= self.scale
         return pose
 
@@ -372,4 +378,50 @@ class Parser:
             tar_c2w=tar.pose,
             src_c2w=src.pose,
             tar_nums=tar.points.shape[0],
+        )
+
+
+class ParserTrainer(Sequence[TrainData]):
+    def __init__(
+        self,
+        data_set: Literal["Replica", "TUM"] = "Replica",
+        name: str = "room0",
+        normalize: bool = False,
+        batch: int = 1,
+    ):
+        self._data = Replica(name) if data_set == "Replica" else TUM(name)
+        self.K = to_tensor(self._data.K, requires_grad=True)
+        # normalize  pose
+        self.normalize = normalize
+        self.poses = to_tensor(np.array(self._data.poses), device=self.K.device)
+        if normalize:
+            T1 = similarity_from_cameras(self.poses)
+            self.poses, self.factor_T = transform_cameras(T1, self.poses)
+
+            self.normalize_T = T1
+        else:
+            self.factor_T = torch.scalar_tensor(1.0, device=self.poses.device)
+            self.normalize_T = torch.eye(4, device=self.poses.device)
+
+        # size of the scene measured by cameras
+        camera_locations = self.poses[:, :3, 3]
+        scene_center = torch.mean(camera_locations, dim=0)
+        dists = torch.norm(camera_locations - scene_center, dim=1)
+        self.scene_scale = torch.max(dists)
+
+        self.batch = batch
+
+    def __len__(self):
+        return len(self._data)
+
+    def __getitem__(self, index: int) -> TrainData:
+        assert index < len(self._data)
+        data = self._data[index]
+
+        return TrainData(
+            colors=data.colors,
+            pixels=(data.rgbs / 255.0).unsqueeze(0),  # [B, H, W, 3]
+            depth=data.depth.unsqueeze(-1).unsqueeze(0),  # [B, H, W, 1]
+            c2w=self.poses[index].unsqueeze(0),  # [B, 4, 4]
+            image_id=torch.scalar_tensor(index),
         )

@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 from numpy.typing import NDArray
 from torch import Tensor
 
@@ -50,6 +51,17 @@ class RGBDImage:
         """
         return self._colors
 
+    @colors.setter
+    def colors(self, new_colors: Tensor):
+        if new_colors.shape[1] != 3:
+            raise ValueError(
+                "Colors must be a 2-dimensional tensor with the second dimension of size 3."
+            )
+        if torch.any((new_colors < 0) | (new_colors > 1)):
+            raise ValueError(
+                "Color values must be in the range [0, 1]."
+            )
+        self._colors = new_colors
     @property
     def rgbs(self) -> Tensor:
         """

@@ -37,9 +37,9 @@ if __name__ == "__main__":
         "open3d",
     )
 
-    rooms = ["room" + str(i) for i in range(3)]
+    # rooms = ["room" + str(i) for i in range(3)]
 
-    # rooms = ["office" + str(i) for i in range(0, 3)]
+    rooms = ["office" + str(i) for i in range(0, 3)]
     # rooms = ["office" + str(i) for i in range(3, 5)]
 
     finished = load_finished_experiments(file_path)

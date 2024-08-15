@@ -50,7 +50,7 @@ class OptimizationConfig:
 
 @dataclass
 class ViewerConfig:
-    disable_viewer: bool = True
+    disable_viewer: bool = False
     port: int = 8080
 
     # init view
@@ -130,12 +130,12 @@ class TrainData(TensorWrapper):
     """normed data"""
 
     # for GS
-    points: Tensor  # N,3  in camera
     colors: Tensor  # N,3
     pixels: Tensor  # [1, H, W, 3]
 
     depth: Tensor  # [1, H, W, 1]
     c2w: Tensor  # 4,4
-    pca_factor: Tensor = torch.scalar_tensor(
-        1.0
-    )  # for scale depth after rot normalized
+    image_id: Tensor
+    # pca_factor: Tensor = torch.scalar_tensor(
+    #     1.0
+    # )  # for scale depth after rot normalized

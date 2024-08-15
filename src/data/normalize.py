@@ -3,6 +3,80 @@ from torch import Tensor
 
 from .Image import RGBDImage
 
+@torch.no_grad()
+def similarity_from_cameras(
+    c2w: torch.Tensor, strict_scaling: bool = False, center_method: str = "focus"
+) -> torch.Tensor:
+    """
+    Calculate a similarity transformation that aligns and scales camera positions.
+    Parameters
+    ----------
+    c2w : torch.Tensor
+        A batch of camera-to-world transformation matrices of shape (N, 4, 4).
+    strict_scaling : bool, optional
+        If True, use the maximum distance for scaling, otherwise use the median.
+    center_method : str, optional
+        Method for centering the scene, either "focus" for focusing method or "poses" for camera poses centering.
+    Returns
+    -------
+    torch.Tensor
+        A 4x4 similarity transformation matrix that aligns, centers, and scales the input cameras.
+    Raises
+    ------
+    ValueError
+        If the `center_method` is not recognized.
+    """
+    t = c2w[:, :3, 3]
+    R = c2w[:, :3, :3]
+
+    # Rotate the world so that z+ is the up axis
+    ups = torch.sum(R * torch.tensor([0, -1.0, 0], device=R.device), dim=-1)
+    world_up = torch.mean(ups, dim=0)
+    world_up /= torch.norm(world_up)
+
+    up_camspace = torch.tensor([0.0, -1.0, 0.0], device=R.device)
+    c = torch.dot(up_camspace, world_up)
+    cross = torch.linalg.cross(world_up, up_camspace)
+    skew = torch.tensor(
+        [
+            [0.0, -cross[2], cross[1]],
+            [cross[2], 0.0, -cross[0]],
+            [-cross[1], cross[0], 0.0],
+        ],
+        device=R.device,
+    )
+
+    if c > -1:
+        R_align = torch.eye(3, device=R.device) + skew + (skew @ skew) * 1 / (1 + c)
+    else:
+        R_align = torch.tensor(
+            [[-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], device=R.device
+        )
+
+    R = R_align @ R
+    fwds = torch.sum(R * torch.tensor([0, 0.0, 1.0], device=R.device), dim=-1)
+    t = (R_align @ t.unsqueeze(-1)).squeeze(-1)
+
+    # Recenter the scene
+    if center_method == "focus":
+        nearest = t + (fwds * -t).sum(dim=-1).unsqueeze(-1) * fwds
+        translate = -torch.median(nearest, dim=0)[0]
+    elif center_method == "poses":
+        translate = -torch.median(t, dim=0)[0]
+    else:
+        raise ValueError(f"Unknown center_method {center_method}")
+
+    transform = torch.eye(4, device=R.device)
+    transform[:3, 3] = translate
+    transform[:3, :3] = R_align
+
+    # Rescale the scene using camera distances
+    scale_fn = torch.max if strict_scaling else torch.median
+    scale = 1.0 / scale_fn(torch.norm(t + translate, dim=-1))
+    transform[:3, :] *= scale
+
+    return transform
+
 
 @torch.no_grad()
 def align_principle_axes(point_cloud: torch.Tensor) -> torch.Tensor:
