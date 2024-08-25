@@ -1,4 +1,5 @@
 import kornia
+import kornia.utils
 import torch
 import torch.nn.functional as F
 from gsplat import rasterization
@@ -52,26 +53,39 @@ def compute_silhouette_diff(depth: Tensor, rastered_depth: Tensor) -> Tensor:
 
 def transform_points(matrix: torch.Tensor, points: torch.Tensor) -> torch.Tensor:
     """
-    Transform points using a SE(3) transformation matrix.
+    Transform points using SE(3) transformation matrices.
 
     Parameters
     ----------
     matrix : torch.Tensor
-        A 4x4 SE(3) transformation matrix.
+        A Bx4x4 batch of SE(3) transformation matrices.
     points : torch.Tensor
-        An Nx3 tensor of points to be transformed.
+        A BxNx3 tensor of points to be transformed.
 
     Returns
     -------
     torch.Tensor
-        An Nx3 tensor of transformed points.
+        A BxNx3 tensor of transformed points.
     """
-    assert matrix.shape == (4, 4)
-    assert len(points.shape) == 2 and points.shape[1] == 3
-    return torch.addmm(matrix[:3, 3], points, matrix[:3, :3].t())
+    assert matrix.shape[-2:] == (4, 4)
+    assert points.shape[-1] == 3
+
+    if matrix.dim() == 3 and points.dim() == 3:
+        # Batch processing
+        return (
+            torch.bmm(points, matrix[:, :3, :3].transpose(1, 2))
+            + matrix[:, None, :3, 3]
+        )
+    elif matrix.dim() == 2 and points.dim() == 2:
+        # Single matrix and points
+        return torch.addmm(matrix[:3, 3], points, matrix[:3, :3].t())
+    else:
+        raise ValueError("Input dimensions mismatch")
 
 
-def init_gs_scales(points: torch.Tensor, k: int = 5, eps: float = 1e-24) -> Tensor:
+def init_gs_scales(
+    points: torch.Tensor, k: int = 5, eps: float = 1e-24, max_size: float = 1e-4
+) -> Tensor:
     """
     Initialize scales for Gaussian Splatting with safeguards against large scales.
 
@@ -92,8 +106,8 @@ def init_gs_scales(points: torch.Tensor, k: int = 5, eps: float = 1e-24) -> Tens
     dist_avg = torch.sqrt(dist2_avg + eps)
 
     scales = dist_avg.unsqueeze(-1).repeat(1, 3)
-
-    return scales
+    max_size = torch.scalar_tensor(max_size, device=points.device)
+    return torch.min(scales, max_size)
 
 
 @torch.no_grad()
@@ -168,26 +182,25 @@ def compute_depth_gt(
 def depth_to_points(
     depth: Tensor,
     K: Tensor,
-    include_homogeneous: bool = False,
 ) -> Tensor:
     """
     Project depth map to point clouds using intrinsic matrix.
 
     Parameters
     ----------
-    depth: shape=(H,W)
-    K: shape=(4,4)
-    include_homogeneous: bool, optional
-        Whether to include the homogeneous coordinate (default True).
+    depth: shape=(*, H, W, 1) or (*, H, W)
+    K: shape=(*,4,4)
 
     Returns
     -------
     points: Tensor
-        The generated point cloud, shape=(h*w, 3) or (h*w, 4).
+        The generated point cloud, shape=(*,H,W,3)
     """
-    points_3d = kornia.geometry.depth_to_3d_v2(depth, K).view(-1, 3)
-    if include_homogeneous:
-        points_3d = F.pad(points_3d, (0, 1), value=1)
+    if depth.dim() == 4 or (depth.dim() == 3 and depth.shape[-1] == 1):
+        depth = depth.squeeze(-1)
+    if K.dim() == 3:
+        K = K.squeeze(0)
+    points_3d = kornia.geometry.depth_to_3d_v2(depth, K)
     return points_3d
 
 
@@ -196,20 +209,22 @@ def depth_to_normal(depth: Tensor, K: Tensor) -> Tensor:
     Convert depth map to normal map using the provided depth_to_points function.
 
     Args:
-        depth (Tensor): Depth map of shape [H, W]
-        K (Tensor): Camera intrinsic matrix of shape [4, 4]
+        depth (Tensor): Depth map of shape [B, H, W,1] or [H, W,1]
+        K (Tensor): Camera intrinsic matrix of shape [B, 4, 4] or [4, 4]
 
     Returns:
-        Tensor: Normal map of shape [H, W, 3]
+        Tensor: Normal map of shape [B, H, W, 3]
     """
-    H, W = depth.shape
+    if depth.dim() == 3:
+        depth = depth.unsqueeze(0)
+    if K.dim() == 2:
+        K = K.unsqueeze(0)
+
+    B, H, W, _ = depth.shape
 
     # Convert depth to 3D points
-    points = depth_to_points(depth, K)
-    points = points.view(H, W, 3)
-
-    # Add batch dimension
-    points = points.unsqueeze(0)  # Now shape is [1, H, W, 3]
+    points = depth_to_points(depth, K[0, ...])
+    points = points.view(B, H, W, 3)
 
     # Compute gradients
     # Use padding to handle border cases
@@ -224,4 +239,4 @@ def depth_to_normal(depth: Tensor, K: Tensor) -> Tensor:
     # Normalize the normal vectors
     normal = F.normalize(normal, p=2, dim=-1)
 
-    return normal.squeeze(0)
+    return normal

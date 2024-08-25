@@ -1,10 +1,12 @@
 import json
+from idlelib.autocomplete import FILES
 from pathlib import Path
 
 import numpy as np
 import torch
 import yaml
 from numpy._typing import NDArray
+from torch import Tensor
 
 from src.data.base import DEVICE
 
@@ -39,6 +41,22 @@ def to_tensor(data, device=DEVICE, requires_grad=False, dtype=torch.float32):
 
     data = torch.as_tensor(data, dtype=dtype, device=device)  # More efficient
     return data.requires_grad_(requires_grad)
+
+
+def save_tensor(data: Tensor, file_path: Path | str):
+    path = Path(file_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(data, path)
+    print(f"saved tensor to {path}!")
+
+
+def load_tensor(file_path: Path | str) -> Tensor:
+    path = Path(file_path)
+    if not path.exists():
+        raise FileNotFoundError(f"File not found: {path}")
+    data = torch.load(path)
+    print(f"loaded tensor from{path}!")
+    return data
 
 
 def as_intrinsics_matrix(intrinsics: list[float]) -> NDArray:

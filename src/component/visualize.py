@@ -147,14 +147,55 @@ def vis_depth_filter(depths: list[NDArray]) -> None:
     multi_vis_img([depth_to_colormap(depth) for depth in depths])
 
 
-def depth_to_colormap(depth_image: NDArray):
-    # Normalize and convert the depth image to an 8-bit format, and apply a colormap
-    depth_normalized = (depth_image - np.min(depth_image)) / (
-        np.max(depth_image) - np.min(depth_image)
-    )
-    depth_8bit = np.uint8(depth_normalized * 255)
-    depth_colormap = plt.cm.jet(depth_8bit)  # Using matplotlib's colormap
-    return depth_colormap
+def depth_to_colormap(depth_tensor: torch.Tensor | NDArray) -> np.ndarray:
+    """
+    Convert a depth tensor or array to a colored depth map.
+
+    Args:
+        depth_tensor (Union[torch.Tensor, np.ndarray]): The input depth tensor or array.
+            Expected shape is (B, H, W, 1) for tensor or (H, W, 1) for numpy array.
+            If tensor, it will be converted to numpy array.
+
+    Returns:
+        np.ndarray: Colored depth map as a numpy array with shape (H, W, 3),
+            where the last dimension represents RGB values.
+
+    Note:
+        - If input is a batched tensor, only the first item in the batch will be processed.
+        - The output is a single colormap, not batched.
+        - The colormap used is 'jet' from matplotlib.
+    """
+    # Convert to numpy if it's a tensor
+    if isinstance(depth_tensor, torch.Tensor):
+        depth_array = depth_tensor.half().cpu().numpy()
+        # If batched, take only the first item
+        if depth_array.ndim == 4:
+            depth_array = depth_array[0]
+    else:
+        depth_array = depth_tensor
+
+    # Ensure the depth array is 3D (H, W, 1)
+    if depth_array.ndim != 3 or depth_array.shape[2] != 1:
+        raise ValueError("Input depth should have shape (H, W, 1)")
+
+    # Normalize the depth values
+    depth_min = np.min(depth_array)
+    depth_max = np.max(depth_array)
+    if depth_max > depth_min:
+        depth_normalized = (depth_array - depth_min) / (depth_max - depth_min)
+    else:
+        depth_normalized = np.zeros_like(depth_array)
+
+    # Convert to 8-bit format
+    depth_8bit = (depth_normalized * 255).astype(np.uint8)
+
+    # Apply colormap
+    depth_colormap = plt.cm.jet(depth_8bit.squeeze())  # Shape: (H, W, 4)
+
+    # Convert to RGB by discarding the alpha channel
+    depth_colormap_rgb = (depth_colormap[:, :, :3] * 255).astype(np.uint8)
+
+    return depth_colormap_rgb
 
 
 def show_image(color: NDArray, depth: NDArray):
@@ -180,7 +221,7 @@ def show_image(color: NDArray, depth: NDArray):
     plt.show()
 
 
-def visualize_point_cloud(points: torch.Tensor, colors: torch.Tensor):
+def visualize_point_cloud(points: torch.Tensor, colors: torch.Tensor | None = None):
     """
     Visualize point cloud data using Open3D.
 
@@ -191,14 +232,17 @@ def visualize_point_cloud(points: torch.Tensor, colors: torch.Tensor):
     """
     # Ensure input has correct shape
     assert points.shape[1] == 3, "Point coordinates should have shape (N, 3)"
-    assert colors.shape[1] == 3, "Colors should have shape (N, 3)"
-    assert (
-        points.shape[0] == colors.shape[0]
-    ), "Number of points and colors should be the same"
-
     # Convert to numpy arrays
     points_np = points.detach().cpu().numpy()
-    colors_np = colors.detach().cpu().numpy()
+    if torch.is_tensor(colors):
+        assert colors.shape[1] == 3, "Colors should have shape (N, 3)"
+        assert (
+            points.shape[0] == colors.shape[0]
+        ), "Number of points and colors should be the same"
+
+        colors_np = colors.detach().cpu().numpy()
+    else:
+        colors_np = np.random.random((points_np.shape[0], 3))
 
     # Create Open3D point cloud object
     pcd = o3d.geometry.PointCloud()

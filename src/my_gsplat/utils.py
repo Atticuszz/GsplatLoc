@@ -19,7 +19,7 @@ def knn(x: Tensor, K: int = 4) -> Tensor:
     pcd = small_gicp.PointCloud(x_np.astype(np.float64))
     model = small_gicp.KdTree(pcd, num_threads=32)
     _, distances = model.batch_knn_search(x_np, k=K, num_threads=64)
-    return to_tensor(distances, device=DEVICE, requires_grad=True)
+    return to_tensor(distances, device=x.device, requires_grad=True)
 
 
 def remove_outliers(

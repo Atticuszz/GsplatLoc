@@ -3,7 +3,6 @@ import torch
 from numpy.typing import NDArray
 from torch import Tensor
 
-from src.data.base import DEVICE
 from src.data.utils import to_tensor
 from src.my_gsplat.geometry import depth_to_points
 from src.my_gsplat.utils import remove_outliers
@@ -25,11 +24,11 @@ class RGBDImage:
             raise ValueError(
                 "RGB's height and width must match Depth's height and width."
             )
-        self._rgb = to_tensor(rgb, device=DEVICE)
-        self._depth = to_tensor(depth, device=DEVICE)
-        self._K = to_tensor(K, device=DEVICE)
-        self._pose = to_tensor(pose, device=DEVICE)
-        self._pcd = depth_to_points(self._depth, self._K)
+        self._rgb = to_tensor(rgb)
+        self._depth = to_tensor(depth)
+        self._K = to_tensor(K)
+        self._pose = to_tensor(pose)
+        self._pcd = depth_to_points(self._depth, self._K).view(-1, 3)
 
         # NOTE: remove outliers
         self._pcd, inlier_mask = remove_outliers(self._pcd, verbose=False)
@@ -58,10 +57,9 @@ class RGBDImage:
                 "Colors must be a 2-dimensional tensor with the second dimension of size 3."
             )
         if torch.any((new_colors < 0) | (new_colors > 1)):
-            raise ValueError(
-                "Color values must be in the range [0, 1]."
-            )
+            raise ValueError("Color values must be in the range [0, 1].")
         self._colors = new_colors
+
     @property
     def rgbs(self) -> Tensor:
         """
@@ -127,7 +125,7 @@ class RGBDImage:
         in camera pcd
         Returns
         -------
-        pcd : Tensor shape=(h*w, 3)
+        pcd : Tensor shape=(N, 3)
         """
         return self._pcd
 
@@ -135,6 +133,6 @@ class RGBDImage:
     def points(self, new_points: Tensor):
         if new_points.shape[1] != 3:
             raise ValueError(
-                "Points must be a 2-dimensional tensor with the second dimension of size 3."
+                "Points must be a 2-dimensional tensor with the 2nd dimension of size 3."
             )
         self._pcd = new_points

@@ -26,7 +26,7 @@ class OptimizationConfig:
     ssim_lambda: float = 0.5
     depth_lambda: float = 0.8
     normal_lambda: float = 0.0
-
+    batch_size: int = 1
     ssim: StructuralSimilarityIndexMeasure = None
     psnr: PeakSignalNoiseRatio = None
     lpips: LearnedPerceptualImagePatchSimilarity = None
@@ -86,7 +86,7 @@ class TensorWrapper:
         """
         for attr_name, attr_value in self.__dict__.items():
             if torch.is_tensor(attr_value):
-                setattr(self, attr_name, attr_value.to(device))
+                setattr(self, attr_name, attr_value.to(device, non_blocking=True))
         return self
 
     def enable_gradients(self) -> "TensorWrapper":
@@ -130,11 +130,10 @@ class TrainData(TensorWrapper):
     """normed data"""
 
     # for GS
-    colors: Tensor  # N,3
-    pixels: Tensor  # [1, H, W, 3]
+    # pixels: Tensor  # [B, H, W, 3]
 
-    depth: Tensor  # [1, H, W, 1]
-    c2w: Tensor  # 4,4
+    depth: Tensor  # [B, H, W, 1]
+    c2w: Tensor  # [B,4,4]
     image_id: Tensor
     # pca_factor: Tensor = torch.scalar_tensor(
     #     1.0

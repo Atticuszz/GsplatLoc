@@ -70,19 +70,21 @@ def compute_normal_consistency_loss(
     Compute the normal consistency loss between two depth images.
 
     Args:
-        depth_real (Tensor): Real depth image of shape [H, W] or [1, H, W]
-        depth_rendered (Tensor): Rendered depth image of shape [H, W] or [1, H, W]
-        K: shape=(4,4)
+        depth_real (Tensor): Real depth image of shape [B, H, W,1] or [H, W,1]
+        depth_rendered (Tensor): Rendered depth image of shape [B, H, W,1] or [H, W,1]
+        K: shape=(B, 4, 4) or (4, 4)
         loss_type (str): Type of loss to use ('cosine', 'l1', or 'mse')
 
     Returns:
         Tensor: Computed loss
     """
-    # Ensure depths are 3D tensors
+    # Ensure depths and K are 3D tensors
     if depth_real.dim() == 3:
-        depth_real = depth_real.squeeze(0)
+        depth_real = depth_real.unsqueeze(0)
     if depth_rendered.dim() == 3:
-        depth_rendered = depth_rendered.squeeze(0)
+        depth_rendered = depth_rendered.unsqueeze(0)
+    if K.dim() == 2:
+        K = K.unsqueeze(0)
 
     # Compute normals from depths
     normal_real = depth_to_normal(depth_real, K=K)
@@ -90,7 +92,7 @@ def compute_normal_consistency_loss(
 
     # Compute loss based on specified type
     if loss_type == "cosine":
-        loss = 1 - F.cosine_similarity(normal_real, normal_rendered, dim=1).mean()
+        loss = 1 - F.cosine_similarity(normal_real, normal_rendered, dim=-1).mean()
     elif loss_type == "l1":
         loss = F.l1_loss(normal_real, normal_rendered)
     elif loss_type == "mse":

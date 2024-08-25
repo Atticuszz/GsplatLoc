@@ -3,6 +3,7 @@ from torch import Tensor
 
 from .Image import RGBDImage
 
+
 @torch.no_grad()
 def similarity_from_cameras(
     c2w: torch.Tensor, strict_scaling: bool = False, center_method: str = "focus"
@@ -175,7 +176,7 @@ def transform_cameras(
     transformed[:, :3, :3] /= scaling.unsqueeze(
         -1
     )  # Unsqueeze to match the shape for broadcasting
-    return transformed, scaling
+    return transformed, scaling[0] if scaling.dim != 1 else scaling
 
 
 @torch.no_grad()
@@ -196,3 +197,16 @@ def apply_normalize_T(tar: RGBDImage, T: Tensor) -> Tensor:
     normed_tar_pose, scale_factor = transform_cameras(T, tar.pose.unsqueeze(0))
     tar.pose = normed_tar_pose.squeeze(0)
     return scale_factor
+
+
+def normalize_T(camtoworlds, points=None):
+    T1 = similarity_from_cameras(camtoworlds)
+    camtoworlds, scales = transform_cameras(T1, camtoworlds)
+    if points is not None:
+        points = transform_points(T1, points)
+        T2 = align_principle_axes(points)
+        camtoworlds, _ = transform_cameras(T2, camtoworlds)
+        points = transform_points(T2, points)
+        return camtoworlds, points, T2 @ T1, scales
+    else:
+        return (camtoworlds, T1, scales)
