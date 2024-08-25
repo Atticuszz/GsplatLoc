@@ -103,7 +103,7 @@ def main():
         )
 
         runner = Runner(config)
-        runner.config.adjust_steps()
+        runner.cfg.adjust_steps()
         runner.train()
 
         if not args.disable_viewer:

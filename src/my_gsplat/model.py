@@ -7,9 +7,12 @@ from kornia import geometry as KG
 from torch import Tensor, nn
 from torch.optim import Adam, Optimizer
 
-from ..data.base import DEVICE
+from ..component.visualize import depth_to_colormap
 from ..data.utils import to_tensor
-from .geometry import construct_full_pose, init_gs_scales
+from .geometry import (
+    construct_full_pose,
+    init_gs_scales,
+)
 from .transform import quat_to_rotation_matrix, rotation_matrix_to_quaternion
 from .utils import rgb_to_sh
 
@@ -136,43 +139,65 @@ class GsConfig:
 class GSModel(nn.Module):
     def __init__(
         self,
-        # dataset
-        points: Tensor,  # N,3
-        colors: Tensor,  # N,3
-        *,
-        # config
         config: GsConfig = GsConfig(),
     ):
         super().__init__()
-        self.optimizers = None
         self.config = config
-        points = points
-        rgbs = colors
+        # Initialize empty tensors
+        self.means3d = torch.empty(0, 3)
+        self.opacities = torch.empty(0)
+        self.scales = torch.empty(0, 3)
+        self.quats = torch.empty(0, 4)
+        self.colors = torch.empty(0, (self.config.sh_degree + 1) ** 2, 3)
+        self.sh0 = torch.empty(0, 1, 3)
+        self.shN = torch.empty(0, (self.config.sh_degree + 1) ** 2 - 1, 3)
 
-        # visualize_point_cloud(points, rgbs)
+    def init_gs(self, points: Tensor, rgbs: Tensor):
+        """
+        Initialize Gaussian Splatting model parameters.
 
-        # Parameters
+        Args:
+            points (Tensor): Point cloud positions of shape (N, 3).
+            rgbs (Tensor): RGB colors of the points of shape (N, 3).
+
+        This method initializes the following model parameters:
+        - means3d: 3D positions of Gaussians
+        - opacities: Opacity values for each Gaussian
+        - scales: Scale values for each Gaussian
+        - quats: Rotation quaternions for each Gaussian
+        - colors: SH coefficients for color representation
+        """
         self.means3d = points  # [N, 3]
         self.opacities = torch.logit(
-            torch.full((points.shape[0],), self.config.init_opa, device=self.device)
+            torch.full((points.shape[0],), self.config.init_opa)
         )
         # [N,]
         # Calculate distances for initial scale
         self.scales = init_gs_scales(points)
+        print(f"init scales:{self.scales.max()}")
         # NOTE: no deformation
         self.quats = to_tensor([1, 0, 0, 0], requires_grad=True).repeat(
             points.shape[0], 1
         )  # [N, 4]
-        # self.quats = torch.nn.Parameter(quats)
 
-        # # color is SH coefficients.
+        # color is SH coefficients.
         colors = torch.zeros(
-            (points.shape[0], (self.config.sh_degree + 1) ** 2, 3), device=self.device
+            (points.shape[0], (self.config.sh_degree + 1) ** 2, 3)
         )  # [N, K, 3]
         colors[:, 0, :] = rgb_to_sh(rgbs)  # Initialize SH coefficients
-        self.colors = rgbs
+        self.colors = colors
         self.sh0 = colors[:, :1, :]
         self.shN = colors[:, 1:, :]
+        self.to(points.device)
+
+    def to(self, device):
+        self.means3d = self.means3d.to(device, non_blocking=True)
+        self.opacities = self.opacities.to(device, non_blocking=True)
+        self.scales = self.scales.to(device, non_blocking=True)
+        self.quats = self.quats.to(device, non_blocking=True)
+        self.colors = self.colors.to(device, non_blocking=True)
+        self.sh0 = self.sh0.to(device, non_blocking=True)
+        self.shN = self.shN.to(device, non_blocking=True)
 
     def __len__(self):
         return self.means3d.shape[0]
@@ -228,14 +253,19 @@ class GSModel(nn.Module):
         W, H = img_wh
         c2w = camera_state.c2w
         K = camera_state.get_K(img_wh)
-        c2w = torch.from_numpy(c2w).float().to(DEVICE)
-        K = torch.from_numpy(K).float().to(DEVICE)
+        c2w = torch.from_numpy(c2w).float().to(self.device)
+        K = torch.from_numpy(K).float().to(self.device)
         render_colors, _, _ = self.forward(
             camtoworlds=c2w[None],
             Ks=K[None],
             width=W,
             height=H,
-            # sh_degree=self.config.sh_degree,  # active all SH degrees
+            render_mode="ED",
             # radius_clip=3.0,  # skip GSs that have small image radius (in pixels)
         )  # [1, H, W, 3]
-        return render_colors[0].cpu().numpy()
+        # normals = depth_to_normal(render_colors, K).cpu().numpy()
+        # del render_colors
+        # return normals[0]
+        depth = depth_to_colormap(render_colors)
+        del render_colors
+        return depth

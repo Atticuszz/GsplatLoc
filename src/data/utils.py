@@ -1,5 +1,4 @@
 import json
-from idlelib.autocomplete import FILES
 from pathlib import Path
 
 import numpy as np

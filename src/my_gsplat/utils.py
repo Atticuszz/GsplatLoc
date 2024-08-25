@@ -3,7 +3,6 @@ import small_gicp
 import torch
 from torch import Tensor
 
-from src.data.base import DEVICE
 from src.data.utils import to_tensor
 
 # def knn(x: Tensor, K: int = 4) -> Tensor:
@@ -18,7 +17,7 @@ def knn(x: Tensor, K: int = 4) -> Tensor:
     x_np = x.cpu().numpy() if not x.requires_grad else x.detach().cpu().numpy()
     pcd = small_gicp.PointCloud(x_np.astype(np.float64))
     model = small_gicp.KdTree(pcd, num_threads=32)
-    _, distances = model.batch_knn_search(x_np, k=K, num_threads=64)
+    _, distances = model.batch_knn_search(x_np, k=K, num_threads=16)
     return to_tensor(distances, device=x.device, requires_grad=True)
 
 

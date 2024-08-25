@@ -4,10 +4,11 @@ from timeit import default_timer
 import torch
 import tqdm
 
-from src.data import AlignData, Parser
+from src.data import AlignData
 from src.data.base import DEVICE, Config
 from src.eval.experiment import ExperimentBase, WandbConfig
 
+from ..data.dataset import ParserTrainer
 from ..eval.utils import (
     calculate_rotation_error,
     calculate_translation_error,
@@ -30,22 +31,25 @@ class Runner(ExperimentBase):
         set_random_seed(42)
         # Setup output directories.
 
-        self.config = base_config
-        self.config.max_steps = wandb_config.num_iters
+        self.cfg = base_config
+        self.cfg.max_steps = wandb_config.num_iters
         # load data
-        self.parser = Parser(
+        self.parser = ParserTrainer(
             data_set=wandb_config.dataset,
             name=self.sub_set,
             normalize=wandb_config.normalize,
+            batch_size=base_config.batch_size,
         )
 
         # Losses & Metrics.
-        self.config.init_loss()
+        self.cfg.init_loss()
 
     def train(self):
         # torch.autograd.set_detect_anomaly(True)
         torch.set_float32_matmul_precision("high")
-        Ks = self.parser.K.unsqueeze(0)  # [1, 3, 3]
+        Ks = (
+            self.parser.K.unsqueeze(0).expand(self.cfg.batch_size, -1, -1).to("cuda")
+        )  # [1, 3, 3]
         for i, train_data in enumerate(self.parser):
             if i >= 1998:
                 break
@@ -53,14 +57,17 @@ class Runner(ExperimentBase):
             train_data: AlignData
             height, width = train_data.pixels.shape[1:3]
 
-            max_steps = self.config.max_steps
+            max_steps = self.cfg.max_steps
             # NOTE: Models init with tar.points
-            gs_splats = GSModel(train_data.tar_points, train_data.colors).to(DEVICE)
+            gs_splats = GSModel()
+            gs_splats.init_gs(train_data.tar_points[0, ...], train_data.colors[0, ...])
 
             depths_gt = train_data.src_depth  # [1, H, W, 1]
 
             # camera init with tar.pose
-            camera_opt = CameraOptModule_quat_tans(train_data.tar_c2w).to(DEVICE)
+            camera_opt = CameraOptModule_quat_tans(train_data.tar_c2w[0, ...]).to(
+                DEVICE
+            )
 
             schedulers = [
                 torch.optim.lr_scheduler.ExponentialLR(
@@ -72,18 +79,18 @@ class Runner(ExperimentBase):
             ]
 
             # nerf viewer
-            if not self.config.disable_viewer:
-                self.config.init_view(gs_splats.viewer_render_fn)
+            if not self.cfg.disable_viewer:
+                self.cfg.init_view(gs_splats.viewer_render_fn)
             init_step = 0
             pbar = tqdm.tqdm(range(init_step, max_steps))
             for step in pbar:
                 camera_opt.optimizer_clean()
                 # NOTE: Training loop.
                 global_tic = default_timer()
-                if not self.config.disable_viewer:
-                    while self.config.viewer.state.status == "paused":
+                if not self.cfg.disable_viewer:
+                    while self.cfg.viewer.state.status == "paused":
                         time.sleep(0.01)
-                    self.config.viewer.lock.acquire()
+                    self.cfg.viewer.lock.acquire()
                     tic = default_timer()
 
                 # NOTE: start forward
@@ -116,7 +123,7 @@ class Runner(ExperimentBase):
                 # ) / (non_zero_depth_mask.sum() + 1e-8)
 
                 # # SSIM Loss
-                # ssim_value = self.config.ssim(
+                # ssim_value = self.cfg.ssim(
                 #     (pixels * non_zero_depth_mask).permute(0, 3, 1, 2),
                 #     (colors * non_zero_depth_mask).permute(0, 3, 1, 2),
                 # )
@@ -143,10 +150,10 @@ class Runner(ExperimentBase):
                 # )
                 # Total Loss
                 total_loss = (
-                    depth_loss * self.config.depth_lambda
-                    # + normal_loss * self.config.normal_lambda
+                    depth_loss * self.cfg.depth_lambda
+                    # + normal_loss * self.cfg.normal_lambda
                     + silhouette_loss
-                    * (1 - self.config.depth_lambda - self.config.normal_lambda)
+                    * (1 - self.cfg.depth_lambda - self.cfg.normal_lambda)
                 )
 
                 total_loss.backward(retain_graph=True)
@@ -157,36 +164,34 @@ class Runner(ExperimentBase):
                     desc = f"loss={total_loss.item():.8f}|"
                     pbar.set_description(desc)
 
-                    if self.config.early_stop:
+                    if self.cfg.early_stop:
                         # NOTE: monitor the pose error
                         eT = calculate_translation_error(
                             cur_c2w,
-                            train_data.src_c2w,
+                            train_data.src_c2w[0, ...],
                         )
 
                         eR = calculate_rotation_error(
                             cur_c2w,
-                            train_data.src_c2w,
+                            train_data.src_c2w[0, ...],
                         )
                         if step > 100:
-                            if total_loss.item() < self.config.best_loss:
-                                self.config.best_loss = total_loss.item()
-                                self.config.best_silhouette_loss = (
-                                    silhouette_loss.item()
-                                )
-                                self.config.best_depth_loss = depth_loss.item()
-                                self.config.best_eT = eT
-                                self.config.best_eR = eR
-                                self.config.counter = 0
+                            if total_loss.item() < self.cfg.best_loss:
+                                self.cfg.best_loss = total_loss.item()
+                                self.cfg.best_silhouette_loss = silhouette_loss.item()
+                                self.cfg.best_depth_loss = depth_loss.item()
+                                self.cfg.best_eT = eT
+                                self.cfg.best_eR = eR
+                                self.cfg.counter = 0
                             else:
-                                self.config.counter += 1
-                        desc += f"best_eR:{self.config.best_eR}| best_eT: {self.config.best_eT}|cur_i:{i}|"
+                                self.cfg.counter += 1
+                        desc += f"best_eR:{self.cfg.best_eR}| best_eT: {self.cfg.best_eT}|cur_i:{i}|"
                         pbar.set_description(desc)
-                        if self.config.counter >= self.config.patience:
+                        if self.cfg.counter >= self.cfg.patience:
                             # NOTE: log here
                             # loss
                             self.logger.log_loss(
-                                "total_loss", self.config.best_loss, step=i
+                                "total_loss", self.cfg.best_loss, step=i
                             )
                             # self.logger.log_loss(
                             #     "pixels", l1loss.item(), step=i, l_type="l1"
@@ -196,19 +201,19 @@ class Runner(ExperimentBase):
                             # )
                             self.logger.log_loss(
                                 "depth",
-                                self.config.best_depth_loss,
+                                self.cfg.best_depth_loss,
                                 step=i,
                                 l_type="l1",
                             )
                             self.logger.log_loss(
                                 "silhouette_loss",
-                                self.config.best_silhouette_loss,
+                                self.cfg.best_silhouette_loss,
                                 step=i,
                                 l_type="l1",
                             )
                             # NOTE: IMAGE
                             #
-                            # psnr = self.config.psnr(
+                            # psnr = self.cfg.psnr(
                             #     (pixels * non_zero_depth_mask).permute(0, 3, 1, 2),
                             #     (colors * non_zero_depth_mask).permute(0, 3, 1, 2),
                             # )
@@ -231,10 +236,8 @@ class Runner(ExperimentBase):
                             )
 
                             # Error
-                            self.logger.log_translation_error(
-                                self.config.best_eT, step=i
-                            )
-                            self.logger.log_rotation_error(self.config.best_eR, step=i)
+                            self.logger.log_translation_error(self.cfg.best_eT, step=i)
+                            self.logger.log_rotation_error(self.cfg.best_eR, step=i)
                             # LR
                             self.logger.log_LR(
                                 model=camera_opt,
@@ -244,12 +247,12 @@ class Runner(ExperimentBase):
                             desc += f"Early stopping triggered at step {step}|"
                             # NOTE: clean
                             (
-                                self.config.counter,
-                                self.config.best_loss,
-                                self.config.best_silhouette_loss,
-                                self.config.best_depth_loss,
-                                self.config.best_eT,
-                                self.config.best_eR,
+                                self.cfg.counter,
+                                self.cfg.best_loss,
+                                self.cfg.best_silhouette_loss,
+                                self.cfg.best_depth_loss,
+                                self.cfg.best_eT,
+                                self.cfg.best_eR,
                             ) = (
                                 0,
                                 float("inf"),
@@ -267,16 +270,16 @@ class Runner(ExperimentBase):
                     scheduler.step()
 
                 # viewer
-                if not self.config.disable_viewer:
-                    self.config.viewer.lock.release()
+                if not self.cfg.disable_viewer:
+                    self.cfg.viewer.lock.release()
                     num_train_steps_per_sec = 1.0 / (time.time() - tic)
                     num_train_rays_per_sec = (
                         num_train_rays_per_step * num_train_steps_per_sec
                     )
                     # Update the viewer state.
-                    self.config.viewer.state.num_train_rays_per_sec = (
+                    self.cfg.viewer.state.num_train_rays_per_sec = (
                         num_train_rays_per_sec
                     )
                     # Update the scene.
-                    self.config.viewer.update(step, num_train_rays_per_step)
+                    self.cfg.viewer.update(step, num_train_rays_per_step)
         self.logger.finish()

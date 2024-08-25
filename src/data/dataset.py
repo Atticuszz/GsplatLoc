@@ -1,22 +1,20 @@
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Literal
 
 import cv2
 import numpy as np
 import torch
+from functorch.dim import Tensor
 from natsort import natsorted
+from torch.utils.data import DataLoader, Dataset
 
 from src.my_gsplat.geometry import compute_depth_gt, transform_points
-from thirdparty.gsplat.tests.test_strategy import device
 
-from .base import AlignData, TrainData
+from .base import DEVICE, AlignData
 from .Image import RGBDImage
 from .normalize import (
     normalize_2C,
-    similarity_from_cameras,
-    transform_cameras,
-    align_principle_axes,
 )
 from .utils import as_intrinsics_matrix, load_camera_cfg, to_tensor
 
@@ -124,7 +122,7 @@ class Replica(BaseDataset):
         depth_path = self._depth_paths[index]
         if depth_path.suffix == ".png":
             depth = cv2.imread(depth_path.as_posix(), cv2.IMREAD_UNCHANGED).astype(
-                np.float64
+                np.float32
             )
         else:
             raise ValueError(f"Unsupported depth file format {depth_path.suffix}.")
@@ -133,7 +131,7 @@ class Replica(BaseDataset):
     def _get_rgb(self, index: int | None = None) -> np.ndarray:
         color_path = self._color_paths[index]
         # convert to rgb
-        color = cv2.imread(color_path.as_posix(), cv2.IMREAD_COLOR).astype(np.float64)
+        color = cv2.imread(color_path.as_posix(), cv2.IMREAD_COLOR).astype(np.float32)
         return color
 
     def _load_poses(self, index: int | None = None) -> list[np.ndarray]:
@@ -230,7 +228,7 @@ class TUM(BaseDataset):
         color = cv2.imread(color_path.as_posix(), cv2.IMREAD_COLOR)
         if self.distortion is not None:
             color = cv2.undistort(color, self.K, self.distortion)
-        color = cv2.cvtColor(color, cv2.COLOR_BGR2RGB).astype(np.float64)
+        color = cv2.cvtColor(color, cv2.COLOR_BGR2RGB).astype(np.float32)
         if self.crop_edge > 0:
             color = color[
                 self.crop_edge : -self.crop_edge, self.crop_edge : -self.crop_edge
@@ -328,29 +326,23 @@ class TUM(BaseDataset):
         return pose
 
 
-class Parser:
-    def __init__(
-        self,
-        data_set: Literal["Replica", "TUM"] = "Replica",
-        name: str = "room0",
-        normalize: bool = False,
-    ):
+class ParserDataset(Dataset):
+    def __init__(self, data_set, name, normalize=True):
         self._data = Replica(name) if data_set == "Replica" else TUM(name)
         self.K = to_tensor(self._data.K, requires_grad=True)
-        # normalize points and pose
         self.normalize = normalize
 
-    def __getitem__(self, index: int) -> AlignData:
-        assert index < len(self._data)
-        tar, src = self._data[index], self._data[index + 1]
+    def __len__(self):
+        return len(self._data)
+
+    def __getitem__(self, idx: int) -> dict[str, Tensor]:
+        assert idx < len(self._data)
+        tar, src = self._data[idx], self._data[idx + 1]
         # transform to world
         tar.points = transform_points(tar.pose, tar.points)
         src.points = transform_points(tar.pose, src.points)
 
-        # NOTE: PCA
-        pca_factor = torch.scalar_tensor(1.0, device=tar.points.device)
         if self.normalize:
-
             # NOTE: PCA
             tar, src, pca_factor = normalize_2C(tar, src)
             ks = self.K.unsqueeze(0)  # [1, 3, 3]
@@ -368,60 +360,55 @@ class Parser:
                 )
                 / pca_factor
             )
-        return AlignData(
-            pca_factor=pca_factor,
-            colors=tar.colors,
-            pixels=(src.rgbs / 255.0).unsqueeze(0),  # [1, H, W, 3]
+        return dict(
+            colors=tar.colors,  # N,3
+            pixels=(src.rgbs / 255.0),  # [H, W, 3]
             tar_points=tar.points,
-            src_points=src.points,
-            src_depth=src.depth.unsqueeze(-1).unsqueeze(0),  # [1, H, W, 1]
+            src_depth=src.depth.unsqueeze(-1),  # [H, W, 1]
             tar_c2w=tar.pose,
             src_c2w=src.pose,
-            tar_nums=tar.points.shape[0],
         )
 
 
-class ParserTrainer(Sequence[TrainData]):
+class ParserTrainer(Iterable[AlignData]):
     def __init__(
         self,
         data_set: Literal["Replica", "TUM"] = "Replica",
         name: str = "room0",
-        normalize: bool = False,
-        batch: int = 1,
+        normalize: bool = True,
+        batch_size: int = 1,
+        shuffle: bool = False,
+        num_workers: int = 0,
+        prefetch_factor: int = 2,
     ):
-        self._data = Replica(name) if data_set == "Replica" else TUM(name)
-        self.K = to_tensor(self._data.K, requires_grad=True)
-        # normalize  pose
-        self.normalize = normalize
-        self.poses = to_tensor(np.array(self._data.poses), device=self.K.device)
-        if normalize:
-            T1 = similarity_from_cameras(self.poses)
-            self.poses, self.factor_T = transform_cameras(T1, self.poses)
+        self._dataset = ParserDataset(data_set, name, normalize)
+        if DEVICE == "cuda" and num_workers > 0:
+            torch.multiprocessing.set_start_method("spawn")  # good solution !!!!
+        self._dataloader = DataLoader(
+            self._dataset,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            num_workers=num_workers,
+            collate_fn=self.collate_fn,
+            # pin_memory=True,
+            persistent_workers=True if num_workers != 0 else False,
+            # prefetch_factor=prefetch_factor,
+        )
+        self.K = self._dataset.K
 
-            self.normalize_T = T1
-        else:
-            self.factor_T = torch.scalar_tensor(1.0, device=self.poses.device)
-            self.normalize_T = torch.eye(4, device=self.poses.device)
+    @staticmethod
+    def collate_fn(batch):
+        return AlignData(
+            colors=torch.stack([item["colors"] for item in batch]),
+            pixels=torch.stack([item["pixels"] for item in batch]),
+            tar_points=torch.stack([item["tar_points"] for item in batch]),
+            src_depth=torch.stack([item["src_depth"] for item in batch]),
+            tar_c2w=torch.stack([item["tar_c2w"] for item in batch]),
+            src_c2w=torch.stack([item["src_c2w"] for item in batch]),
+        )
 
-        # size of the scene measured by cameras
-        camera_locations = self.poses[:, :3, 3]
-        scene_center = torch.mean(camera_locations, dim=0)
-        dists = torch.norm(camera_locations - scene_center, dim=1)
-        self.scene_scale = torch.max(dists)
-
-        self.batch = batch
+    def __iter__(self):
+        return iter(self._dataloader)
 
     def __len__(self):
-        return len(self._data)
-
-    def __getitem__(self, index: int) -> TrainData:
-        assert index < len(self._data)
-        data = self._data[index]
-
-        return TrainData(
-            colors=data.colors,
-            pixels=(data.rgbs / 255.0).unsqueeze(0),  # [B, H, W, 3]
-            depth=data.depth.unsqueeze(-1).unsqueeze(0),  # [B, H, W, 1]
-            c2w=self.poses[index].unsqueeze(0),  # [B, 4, 4]
-            image_id=torch.scalar_tensor(index),
-        )
+        return len(self._dataloader)

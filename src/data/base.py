@@ -50,7 +50,7 @@ class OptimizationConfig:
 
 @dataclass
 class ViewerConfig:
-    disable_viewer: bool = False
+    disable_viewer: bool = True
     port: int = 8080
 
     # init view
@@ -112,29 +112,9 @@ class AlignData(TensorWrapper):
 
     # for GS
 
-    colors: Tensor  # N,3
-    pixels: Tensor  # [1, H, W, 3]
-    # points: Tensor  # N,3
-    tar_points: Tensor
-    src_points: Tensor
+    colors: Tensor  # B,N,3
+    pixels: Tensor  # [B, H, W, 3]
+    tar_points: Tensor  # B,N,3
     src_depth: Tensor  # B,H,w,1
-    tar_c2w: Tensor  # 4,4
-    src_c2w: Tensor  # 4,4
-    tar_nums: int  # for slice tar and src
-    # sphere_factor: Tensor  # for scale depth after rot normalized
-    pca_factor: Tensor
-
-
-@dataclass
-class TrainData(TensorWrapper):
-    """normed data"""
-
-    # for GS
-    # pixels: Tensor  # [B, H, W, 3]
-
-    depth: Tensor  # [B, H, W, 1]
-    c2w: Tensor  # [B,4,4]
-    image_id: Tensor
-    # pca_factor: Tensor = torch.scalar_tensor(
-    #     1.0
-    # )  # for scale depth after rot normalized
+    tar_c2w: Tensor  # B,4,4
+    src_c2w: Tensor  # B,4,4
