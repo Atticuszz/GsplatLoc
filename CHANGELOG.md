@@ -1,8 +1,66 @@
 # CHANGELOG
 
+## v0.10.0 (2024-09-01)
+
+### Feature
+
+* feat: finish study ([`97f31f4`](https://github.com/Atticuszz/GsplatLoc/commit/97f31f49dfea3cce0690e4d05532659cf3899a76))
+
+### Unknown
+
+* Merge pull request #4 from Atticuszz/gs_slam_tracker
+
+open3d icps ([`6f48d50`](https://github.com/Atticuszz/GsplatLoc/commit/6f48d50d5fe6ae9a0eb966209bda3ae1066d6e61))
+
+* [pre-commit.ci] auto fixes from pre-commit.com hooks
+
+for more information, see https://pre-commit.ci ([`88471cc`](https://github.com/Atticuszz/GsplatLoc/commit/88471cc04fc2fdfe2ae43fc71a7d9f0f590efec9))
+
+* Merge branch &#39;main&#39; into gs_slam_tracker ([`2ce4958`](https://github.com/Atticuszz/GsplatLoc/commit/2ce4958dfe2eecf027cf2ace44fa4594d6bd8d06))
+
+* Merge pull request #3 from Atticuszz/pre-commit-ci-update-config
+
+[pre-commit.ci] autoupdate ([`6f36ab6`](https://github.com/Atticuszz/GsplatLoc/commit/6f36ab660b6e44fb91f30b02b4e3b6e79f4e41f5))
+
+* [pre-commit.ci] auto fixes from pre-commit.com hooks
+
+for more information, see https://pre-commit.ci ([`470f2c8`](https://github.com/Atticuszz/GsplatLoc/commit/470f2c86bc865879bd4b3ef06ad8595f113c09b3))
+
+* [pre-commit.ci] autoupdate
+
+updates:
+- [github.com/codespell-project/codespell: v2.2.6 → v2.3.0](https://github.com/codespell-project/codespell/compare/v2.2.6...v2.3.0)
+- [github.com/asottile/pyupgrade: v3.15.2 → v3.17.0](https://github.com/asottile/pyupgrade/compare/v3.15.2...v3.17.0)
+- [github.com/psf/black: 24.4.2 → 24.8.0](https://github.com/psf/black/compare/24.4.2...24.8.0)
+- [github.com/commitizen-tools/commitizen: v3.25.0 → v3.28.0](https://github.com/commitizen-tools/commitizen/compare/v3.25.0...v3.28.0)
+- [github.com/PyCQA/flake8: 7.0.0 → 7.1.1](https://github.com/PyCQA/flake8/compare/7.0.0...7.1.1)
+- [github.com/pre-commit/mirrors-mypy: v1.10.0 → v1.11.1](https://github.com/pre-commit/mirrors-mypy/compare/v1.10.0...v1.11.1) ([`9d6d077`](https://github.com/Atticuszz/GsplatLoc/commit/9d6d077b8a416a03783c47975d784c3151629e6a))
+
 ## v0.9.0 (2024-08-04)
 
 ### Chore
+
+* chore(release): bump version to v0.9.0 ([`5a22189`](https://github.com/Atticuszz/GsplatLoc/commit/5a22189d788477ec149ab5fe89a05806eb036c6e))
+
+* chore: update submodule ([`a51fc2e`](https://github.com/Atticuszz/GsplatLoc/commit/a51fc2eb39074c4ad75cd4a75544ecf6b6529e16))
+
+* chore: update gitignore ([`fd37945`](https://github.com/Atticuszz/GsplatLoc/commit/fd3794571378737cf9448826c808d7b9712ffb9d))
+
+* chore: add .vscode ([`c5f402a`](https://github.com/Atticuszz/GsplatLoc/commit/c5f402a0f7de750eaa1b49dfdb97cac5145a5f70))
+
+* chore: pre commit ([`3381b3a`](https://github.com/Atticuszz/GsplatLoc/commit/3381b3a3482c279a8b6e3437e23ddf60ca48435a))
+
+* chore: add HYBRID method of icp ([`08fa0ae`](https://github.com/Atticuszz/GsplatLoc/commit/08fa0ae98214080e4c6c26c012241ecdca8f343d))
+
+* chore: add factory func ([`ec61d18`](https://github.com/Atticuszz/GsplatLoc/commit/ec61d180b41311363c45b438a5db38eac1b19dc0))
+
+* chore: update gitignore ([`a687546`](https://github.com/Atticuszz/GsplatLoc/commit/a6875465eee60d484d725f9fea5ba97131f7b9e0))
+
+* chore: update gitignore ([`889ecce`](https://github.com/Atticuszz/GsplatLoc/commit/889eccefceb7a0d1a2fc65534cb4413a0af20ad2))
+
+* chore: update gitignore ([`594d0e9`](https://github.com/Atticuszz/GsplatLoc/commit/594d0e9d01151c475ca86efddbbc34c23f3dfd34))
+
+* chore: update .gitignore ([`bf69fd2`](https://github.com/Atticuszz/GsplatLoc/commit/bf69fd2e0266a4357acd3bc1ace9a4564a8f74f6))
 
 * chore: add tum dataset and icp tests ([`8c57c87`](https://github.com/Atticuszz/GsplatLoc/commit/8c57c87481058b808e6930487f3dba157f67cd8a))
 
