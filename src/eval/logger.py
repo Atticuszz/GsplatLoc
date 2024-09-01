@@ -8,14 +8,10 @@ from matplotlib import pyplot as plt
 from pandas import DataFrame
 from torch import Tensor
 
-
-import wandb
-
 from .utils import calculate_RMSE_np, compute_silhouette_diff
 
 # os.environ["WANDB_API_KEY"] = "cedd2caf3e18114de5c6bac2c2c789298ece4ea5"
 # os.environ["WANDB_MODE"] = "offline"
-
 
 
 class WandbLogger:
