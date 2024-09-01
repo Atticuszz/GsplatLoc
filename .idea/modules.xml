@@ -2,9 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/../Gaussian-SLAM/.idea/Gaussian-SLAM.iml" filepath="$PROJECT_DIR$/../Gaussian-SLAM/.idea/Gaussian-SLAM.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/GsplatLoc.iml" filepath="$PROJECT_DIR$/.idea/GsplatLoc.iml" />
-      <module fileurl="file://$PROJECT_DIR$/../SplaTAM/.idea/SplaTAM.iml" filepath="$PROJECT_DIR$/../SplaTAM/.idea/SplaTAM.iml" />
     </modules>
   </component>
 </project>

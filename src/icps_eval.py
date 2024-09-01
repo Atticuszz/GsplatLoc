@@ -34,17 +34,19 @@ if __name__ == "__main__":
         "HYBRID",
     ]
     implements = ("open3d",)
-    rooms = [
-        # "freiburg1_desk",
-        # "freiburg1_desk2",
-        # "freiburg1_room",
-        "freiburg2_xyz",
-        # "freiburg3_long_office_household",
-    ]
-    scenes = "TUM"
+    # rooms = [
+    #     # "freiburg1_desk",
+    #     # "freiburg1_desk2",
+    #     # "freiburg1_room",
+    #     # "freiburg2_xyz",
+    #     # "freiburg3_long_office_household",
+    # ]
+    # scenes = "TUM"
+    scenes = "Replica"
     # rooms = ["room" + str(i) for i in range(3)]
 
     # rooms = ["office" + str(i) for i in range(0, 3)]
+    rooms = ["office" + str(i) for i in range(3, 4)]
     # rooms = ["office" + str(i) for i in range(3, 5)]
 
     finished = load_finished_experiments(file_path)

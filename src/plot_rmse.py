@@ -6,10 +6,13 @@ sys.path.append(ROOT)
 from src.eval.logger import WandbLogger
 
 if __name__ == "__main__":
-    baseline = "replica_icps"
+    baseline = ""
     # baseline = "tum"
     log = WandbLogger(
         run_name="plot_RMSE", config={"description": f"baseline_{baseline}"}
     )
 
-    log.plot_RMSE(f"baseline_{baseline}")
+    # log.plot_RMSE(f"baseline_{baseline}")
+    # log.load_history()
+    log.load_history()
+    

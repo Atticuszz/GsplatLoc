@@ -1,14 +1,17 @@
+import json
+from collections import defaultdict
 from datetime import datetime
+
 from pathlib import Path
 from typing import Literal
 
 import torch
 import wandb
 from matplotlib import pyplot as plt
-from pandas import DataFrame
 from torch import Tensor
 
 from .utils import calculate_RMSE_np, compute_silhouette_diff
+
 
 # os.environ["WANDB_API_KEY"] = "cedd2caf3e18114de5c6bac2c2c789298ece4ea5"
 # os.environ["WANDB_MODE"] = "offline"
@@ -248,14 +251,13 @@ class WandbLogger:
         labels: list,
         values: list,
     ):
-
         data = [[label, val] for (label, val) in zip(labels, values)]
         table = wandb.Table(data=data, columns=[label_name, value_name])
         wandb.log(
             {plot_name: wandb.plot.bar(table, label_name, value_name, title=plot_name)}
         )
 
-    def load_history(self, tags: str = "gsplatloc") -> dict[DataFrame]:
+    def load_history(self, tags: str = "baseline", mode: str = "overwrite") -> None:
         """
         https://docs.wandb.ai/ref/python/public-api/api#runs
         Parameters
@@ -264,19 +266,44 @@ class WandbLogger:
 
         Returns
         -------
-        histories: dict[str(sub_set),run.history]
+        histories: list[run.history]
         """
         # filter tags runs
         _runs = self.api.runs(
-            path="supavision/ABGICP", filters={"tags": tags}, order="config.+.sub_set"
+            path=f"{self.entity}/{self.project}",
+            filters={"tags": tags},
+            order="config.+.sub_set",
         )
-        histories = {}
-        for _run in _runs:
+
+        organized_data = defaultdict(lambda: defaultdict(dict))
+        # If appending and file exists, load existing data
+        if mode == "overwrite" and Path("./res.json").exists():
+            with open("./res.json", "r") as f:
+                existing_data = json.load(f)
+            organized_data.update(existing_data)
+
+        for i, _run in enumerate(_runs):
+            print(f"loading {i}th history...")
             run_path = Path(*_run.path).as_posix()
             run = self.api.run(path=run_path)
-            histories[run.config["sub_set"]] = run.history(2000)
-        assert len(histories) == len(_runs)
-        return histories
+            his = run.history(2000)
+
+            eT = his["Translation Error"].to_numpy()
+            eR = his["Rotation Error"].to_numpy()
+            dataset = run.config["dataset"]
+            room = run.config["sub_set"]
+            algorithm = run.config["algorithm"]
+
+            organized_data[dataset][room][algorithm] = {
+                "ATE": calculate_RMSE_np(eT),
+                "AAE": calculate_RMSE_np(eR),
+            }
+        organized_data = json.loads(json.dumps(organized_data))
+
+        with open("./res.json", "w") as f:
+            json.dump(organized_data, f, indent=4)
+
+        print("Data has been saved to res.json")
 
     def plot_RMSE(self, tags: str = "baseline"):
         histories = self.load_history(tags)

@@ -2532,11 +2532,84 @@
         "documentation": {}
     },
     {
-        "label": "datetime",
-        "importPath": "datetime",
-        "description": "datetime",
+        "label": "collections",
+        "kind": 6,
         "isExtraImport": true,
-        "detail": "datetime",
+        "importPath": "collections",
+        "description": "collections",
+        "detail": "collections",
+        "documentation": {}
+    },
+    {
+        "label": "defaultdict",
+        "importPath": "collections",
+        "description": "collections",
+        "isExtraImport": true,
+        "detail": "collections",
+        "documentation": {}
+    },
+    {
+        "label": "OrderedDict",
+        "importPath": "collections",
+        "description": "collections",
+        "isExtraImport": true,
+        "detail": "collections",
+        "documentation": {}
+    },
+    {
+        "label": "OrderedDict",
+        "importPath": "collections",
+        "description": "collections",
+        "isExtraImport": true,
+        "detail": "collections",
+        "documentation": {}
+    },
+    {
+        "label": "defaultdict",
+        "importPath": "collections",
+        "description": "collections",
+        "isExtraImport": true,
+        "detail": "collections",
+        "documentation": {}
+    },
+    {
+        "label": "namedtuple",
+        "importPath": "collections",
+        "description": "collections",
+        "isExtraImport": true,
+        "detail": "collections",
+        "documentation": {}
+    },
+    {
+        "label": "namedtuple",
+        "importPath": "collections",
+        "description": "collections",
+        "isExtraImport": true,
+        "detail": "collections",
+        "documentation": {}
+    },
+    {
+        "label": "namedtuple",
+        "importPath": "collections",
+        "description": "collections",
+        "isExtraImport": true,
+        "detail": "collections",
+        "documentation": {}
+    },
+    {
+        "label": "namedtuple",
+        "importPath": "collections",
+        "description": "collections",
+        "isExtraImport": true,
+        "detail": "collections",
+        "documentation": {}
+    },
+    {
+        "label": "namedtuple",
+        "importPath": "collections",
+        "description": "collections",
+        "isExtraImport": true,
+        "detail": "collections",
         "documentation": {}
     },
     {
@@ -2548,11 +2621,11 @@
         "documentation": {}
     },
     {
-        "label": "DataFrame",
-        "importPath": "pandas",
-        "description": "pandas",
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
         "isExtraImport": true,
-        "detail": "pandas",
+        "detail": "datetime",
         "documentation": {}
     },
     {
@@ -4142,79 +4215,6 @@
         "description": "gaussian_rasterizer",
         "isExtraImport": true,
         "detail": "gaussian_rasterizer",
-        "documentation": {}
-    },
-    {
-        "label": "collections",
-        "kind": 6,
-        "isExtraImport": true,
-        "importPath": "collections",
-        "description": "collections",
-        "detail": "collections",
-        "documentation": {}
-    },
-    {
-        "label": "OrderedDict",
-        "importPath": "collections",
-        "description": "collections",
-        "isExtraImport": true,
-        "detail": "collections",
-        "documentation": {}
-    },
-    {
-        "label": "OrderedDict",
-        "importPath": "collections",
-        "description": "collections",
-        "isExtraImport": true,
-        "detail": "collections",
-        "documentation": {}
-    },
-    {
-        "label": "defaultdict",
-        "importPath": "collections",
-        "description": "collections",
-        "isExtraImport": true,
-        "detail": "collections",
-        "documentation": {}
-    },
-    {
-        "label": "namedtuple",
-        "importPath": "collections",
-        "description": "collections",
-        "isExtraImport": true,
-        "detail": "collections",
-        "documentation": {}
-    },
-    {
-        "label": "namedtuple",
-        "importPath": "collections",
-        "description": "collections",
-        "isExtraImport": true,
-        "detail": "collections",
-        "documentation": {}
-    },
-    {
-        "label": "namedtuple",
-        "importPath": "collections",
-        "description": "collections",
-        "isExtraImport": true,
-        "detail": "collections",
-        "documentation": {}
-    },
-    {
-        "label": "namedtuple",
-        "importPath": "collections",
-        "description": "collections",
-        "isExtraImport": true,
-        "detail": "collections",
-        "documentation": {}
-    },
-    {
-        "label": "namedtuple",
-        "importPath": "collections",
-        "description": "collections",
-        "isExtraImport": true,
-        "detail": "collections",
         "documentation": {}
     },
     {
@@ -7395,7 +7395,7 @@
         "kind": 5,
         "importPath": "src.plot_rmse",
         "description": "src.plot_rmse",
-        "peekOfCode": "ROOT = Path(__file__).parents[1].as_posix()\nsys.path.append(ROOT)\nfrom src.eval.logger import WandbLogger\nif __name__ == \"__main__\":\n    baseline = \"replica_icps\"\n    # baseline = \"tum\"\n    log = WandbLogger(\n        run_name=\"plot_RMSE\", config={\"description\": f\"baseline_{baseline}\"}\n    )\n    log.plot_RMSE(f\"baseline_{baseline}\")",
+        "peekOfCode": "ROOT = Path(__file__).parents[1].as_posix()\nsys.path.append(ROOT)\nfrom src.eval.logger import WandbLogger\nif __name__ == \"__main__\":\n    baseline = \"\"\n    # baseline = \"tum\"\n    log = WandbLogger(\n        run_name=\"plot_RMSE\", config={\"description\": f\"baseline_{baseline}\"}\n    )\n    # log.plot_RMSE(f\"baseline_{baseline}\")",
         "detail": "src.plot_rmse",
         "documentation": {}
     },
