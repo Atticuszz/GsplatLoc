@@ -74,4 +74,5 @@ dmypy.json
 .pyre/
 .pytype/
 cython_debug/
-datasets/
+datasets/**
+
