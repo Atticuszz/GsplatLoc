@@ -9,15 +9,18 @@ from torch import Tensor
 
 import wandb
 
-from ..my_gsplat.geometry import compute_silhouette_diff
-from .utils import calculate_RMSE_np
+from .utils import calculate_RMSE_np, compute_silhouette_diff
+
+# os.environ["WANDB_API_KEY"] = "cedd2caf3e18114de5c6bac2c2c789298ece4ea5"
+# os.environ["WANDB_MODE"] = "offline"
 
 
 class WandbLogger:
     def __init__(self, run_name: str | None = None, config: dict = None):
         """
         Initialize the Weights & Biases logging.
-        use wandb login with api key https://wandb.ai/authorize
+        use wandb login with api key https://wandb.ai/authorize, then wandb login --relogin
+        wandb login --cloud
         """
         if run_name is None:
             run_name = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -25,11 +28,15 @@ class WandbLogger:
             run_name = run_name
         self.entity = "supavision"
         self.project = "ABGICP"
+        # self.entity = "atticuszz"
+        # self.project = "GspaltLoc"
         wandb.init(
             project=self.project,
             entity=self.entity,
             name=run_name,
             config=config,
+            # settings=wandb.Settings(base_url="http://localhost:8080"),
+            # settings=wandb.Settings(base_url="https://wandb.ai"),
         )
         self.api = wandb.Api()
 
@@ -272,7 +279,7 @@ class WandbLogger:
         assert len(histories) == len(_runs)
         return histories
 
-    def plot_RMSE(self, tags: str = "gsplatloc"):
+    def plot_RMSE(self, tags: str = "baseline"):
         histories = self.load_history(tags)
         ates = []
         ares = []
@@ -286,14 +293,14 @@ class WandbLogger:
             ares.append(calculate_RMSE_np(eR))
 
         self.plot_bar(
-            "ATE of Replica",
+            f"ATE of {tags}",
             label_name="scenes",
             value_name="ATEs",
             values=ates,
             labels=scenes,
         )
         self.plot_bar(
-            "ARE of Replica",
+            f"ARE of {tags}",
             label_name="scenes",
             value_name="AREs",
             values=ares,

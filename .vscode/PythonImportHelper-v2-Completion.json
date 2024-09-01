@@ -1997,83 +1997,11 @@
         "documentation": {}
     },
     {
-        "label": "Replica",
-        "importPath": "src.data.dataset",
-        "description": "src.data.dataset",
-        "isExtraImport": true,
-        "detail": "src.data.dataset",
-        "documentation": {}
-    },
-    {
         "label": "get_data_set",
         "importPath": "src.data.dataset",
         "description": "src.data.dataset",
         "isExtraImport": true,
         "detail": "src.data.dataset",
-        "documentation": {}
-    },
-    {
-        "label": "DEVICE",
-        "importPath": "src.data.base",
-        "description": "src.data.base",
-        "isExtraImport": true,
-        "detail": "src.data.base",
-        "documentation": {}
-    },
-    {
-        "label": "DEVICE",
-        "importPath": "src.data.base",
-        "description": "src.data.base",
-        "isExtraImport": true,
-        "detail": "src.data.base",
-        "documentation": {}
-    },
-    {
-        "label": "DEVICE",
-        "importPath": "src.data.base",
-        "description": "src.data.base",
-        "isExtraImport": true,
-        "detail": "src.data.base",
-        "documentation": {}
-    },
-    {
-        "label": "Config",
-        "importPath": "src.data.base",
-        "description": "src.data.base",
-        "isExtraImport": true,
-        "detail": "src.data.base",
-        "documentation": {}
-    },
-    {
-        "label": "DEVICE",
-        "importPath": "src.data.base",
-        "description": "src.data.base",
-        "isExtraImport": true,
-        "detail": "src.data.base",
-        "documentation": {}
-    },
-    {
-        "label": "Config",
-        "importPath": "src.data.base",
-        "description": "src.data.base",
-        "isExtraImport": true,
-        "detail": "src.data.base",
-        "documentation": {}
-    },
-    {
-        "label": "DEVICE",
-        "importPath": "src.data.base",
-        "description": "src.data.base",
-        "isExtraImport": true,
-        "detail": "src.data.base",
-        "documentation": {}
-    },
-    {
-        "label": "DEVICE",
-        "importPath": "src.data.base",
-        "description": "src.data.base",
-        "isExtraImport": true,
-        "detail": "src.data.base",
         "documentation": {}
     },
     {
@@ -2106,22 +2034,6 @@
         "description": "src.my_gsplat.geometry",
         "isExtraImport": true,
         "detail": "src.my_gsplat.geometry",
-        "documentation": {}
-    },
-    {
-        "label": "depth_to_normal",
-        "importPath": "src.my_gsplat.geometry",
-        "description": "src.my_gsplat.geometry",
-        "isExtraImport": true,
-        "detail": "src.my_gsplat.geometry",
-        "documentation": {}
-    },
-    {
-        "label": "remove_outliers",
-        "importPath": "src.my_gsplat.utils",
-        "description": "src.my_gsplat.utils",
-        "isExtraImport": true,
-        "detail": "src.my_gsplat.utils",
         "documentation": {}
     },
     {
@@ -2475,6 +2387,62 @@
         "documentation": {}
     },
     {
+        "label": "DEVICE",
+        "importPath": "src.data.base",
+        "description": "src.data.base",
+        "isExtraImport": true,
+        "detail": "src.data.base",
+        "documentation": {}
+    },
+    {
+        "label": "DEVICE",
+        "importPath": "src.data.base",
+        "description": "src.data.base",
+        "isExtraImport": true,
+        "detail": "src.data.base",
+        "documentation": {}
+    },
+    {
+        "label": "Config",
+        "importPath": "src.data.base",
+        "description": "src.data.base",
+        "isExtraImport": true,
+        "detail": "src.data.base",
+        "documentation": {}
+    },
+    {
+        "label": "DEVICE",
+        "importPath": "src.data.base",
+        "description": "src.data.base",
+        "isExtraImport": true,
+        "detail": "src.data.base",
+        "documentation": {}
+    },
+    {
+        "label": "Config",
+        "importPath": "src.data.base",
+        "description": "src.data.base",
+        "isExtraImport": true,
+        "detail": "src.data.base",
+        "documentation": {}
+    },
+    {
+        "label": "DEVICE",
+        "importPath": "src.data.base",
+        "description": "src.data.base",
+        "isExtraImport": true,
+        "detail": "src.data.base",
+        "documentation": {}
+    },
+    {
+        "label": "DEVICE",
+        "importPath": "src.data.base",
+        "description": "src.data.base",
+        "isExtraImport": true,
+        "detail": "src.data.base",
+        "documentation": {}
+    },
+    {
         "label": "pprint",
         "kind": 6,
         "isExtraImport": true,
@@ -2564,15 +2532,6 @@
         "documentation": {}
     },
     {
-        "label": "os",
-        "kind": 6,
-        "isExtraImport": true,
-        "importPath": "os",
-        "description": "os",
-        "detail": "os",
-        "documentation": {}
-    },
-    {
         "label": "datetime",
         "importPath": "datetime",
         "description": "datetime",
@@ -2586,14 +2545,6 @@
         "description": "datetime",
         "isExtraImport": true,
         "detail": "datetime",
-        "documentation": {}
-    },
-    {
-        "label": "basedir",
-        "importPath": "open3d.examples.visualization.all_widgets",
-        "description": "open3d.examples.visualization.all_widgets",
-        "isExtraImport": true,
-        "detail": "open3d.examples.visualization.all_widgets",
         "documentation": {}
     },
     {
@@ -2623,6 +2574,15 @@
         "documentation": {}
     },
     {
+        "label": "shutil",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "shutil",
+        "description": "shutil",
+        "detail": "shutil",
+        "documentation": {}
+    },
+    {
         "label": "kornia",
         "kind": 6,
         "isExtraImport": true,
@@ -2645,15 +2605,6 @@
         "description": "kornia",
         "isExtraImport": true,
         "detail": "kornia",
-        "documentation": {}
-    },
-    {
-        "label": "shutil",
-        "kind": 6,
-        "isExtraImport": true,
-        "importPath": "shutil",
-        "description": "shutil",
-        "detail": "shutil",
         "documentation": {}
     },
     {
@@ -3124,6 +3075,15 @@
         "description": "src.component.visualize",
         "isExtraImport": true,
         "detail": "src.component.visualize",
+        "documentation": {}
+    },
+    {
+        "label": "os",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "os",
+        "description": "os",
+        "detail": "os",
         "documentation": {}
     },
     {
@@ -7148,15 +7108,6 @@
         "importPath": "src.eval.utils",
         "description": "src.eval.utils",
         "peekOfCode": "def clean_wandb_runs(wandb_dir):\n    wandb_path = pathlib.Path(wandb_dir)\n    for run_dir in wandb_path.iterdir():\n        if not run_dir.is_dir():\n            continue\n        config_path = run_dir / \"files\" / \"config.yaml\"\n        summary_path = run_dir / \"files\" / \"wandb-summary.json\"\n        media_dir = run_dir / \"files\" / \"media\"\n        # 检查 config.yaml 是否存在并包含正确的 dataset 值\n        if config_path.exists():",
-        "detail": "src.eval.utils",
-        "documentation": {}
-    },
-    {
-        "label": "download_runs",
-        "kind": 2,
-        "importPath": "src.eval.utils",
-        "description": "src.eval.utils",
-        "peekOfCode": "def download_runs():\n    import wandb\n    import os\n    api = wandb.Api()\n    entity = \"supavision\"\n    project = \"ABGICP\"\n    # 获取所有runs\n    runs = api.runs(f\"{entity}/{project}\")\n    # 创建一个目录来存储下载的数据\n    base_dir = \"downloaded_runs\"",
         "detail": "src.eval.utils",
         "documentation": {}
     },
