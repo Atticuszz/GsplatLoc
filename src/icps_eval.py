@@ -27,17 +27,22 @@ if __name__ == "__main__":
 
     file_path = Path("grip_o3d_finished_experiments.json")
     methods = [
-        "GICP",
-        "PLANE_ICP",
+        # "GICP",
+        # "PLANE_ICP",
         # "COLORED_ICP",
-        "ICP",
+        # "ICP",
+        "HYBRID",
     ]
-    implements = (
-        # "small_gicp",
-        "open3d",
-    )
-
-    rooms = ["room" + str(i) for i in range(3)]
+    implements = ("open3d",)
+    rooms = [
+        # "freiburg1_desk",
+        # "freiburg1_desk2",
+        # "freiburg1_room",
+        "freiburg2_xyz",
+        # "freiburg3_long_office_household",
+    ]
+    scenes = "TUM"
+    # rooms = ["room" + str(i) for i in range(3)]
 
     # rooms = ["office" + str(i) for i in range(0, 3)]
     # rooms = ["office" + str(i) for i in range(3, 5)]
@@ -52,21 +57,27 @@ if __name__ == "__main__":
                 if config_tuple in finished:
                     continue
                 # small_gicp does not have  color icp
-                if imp == "small_gicp" and method == "COLORED_ICP":
-                    continue
+                # if imp == "small_gicp" and method == "COLORED_ICP":
+                #     continue
                 registration_config = RegistrationConfig(
                     registration_type=method,
                     voxel_downsampling_resolutions=0.0,
+                    implementation=imp,
                     # knn=20,
                 )
                 experiment = ICPExperiment(
                     registration_config=registration_config,
                     wandb_config=WandbConfig(
                         method,
+                        dataset=scenes,
                         sub_set=room,
                         implementation=imp,
-                        description="icps_v3",
+                        description="icps_v3_test",
                     ),
                 )
-                experiment.run()
+                try:
+                    experiment.run()
+                except Exception as e:
+                    experiment.logger.finish()
+                    print(f"experiment.run() with exception: {e}!")
                 save_finished_experiment(file_path, config_tuple)

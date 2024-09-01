@@ -18,7 +18,9 @@ class Scan2ScanICP:
         voxel_downsampling_resolutions: float = 0.0,
         knn: int = 20,
         num_threads=32,
-        registration_type: Literal["ICP", "PLANE_ICP", "GICP", "COLORED_ICP"] = "GICP",
+        registration_type: Literal[
+            "ICP", "PLANE_ICP", "GICP", "COLORED_ICP", "HYBRID"
+        ] = "GICP",
         implementation: Literal["small_gicp", "open3d"] = "small_gicp",
         error_threshold: float = 50.0,
     ):
@@ -48,93 +50,16 @@ class Scan2ScanICP:
 
         self.knn = knn
 
-    def align_pcd(
-        self,
-        raw_points: NDArray[np.float64],
-        init_pose: NDArray[np.float64] | None = None,
-        # ) -> NDArray[np.float64]:
-    ) -> small_gicp.RegistrationResult:
-        """
-        Align new point cloud to the previous point cloud using small_gicp library.
-
-        Parameters
-        ----------
-        raw_points : NDArray[np.float64]
-            Current point cloud data as an (M, 3) numpy array.
-
-        init_pose : NDArray[np.float64], optional
-            Initial transformation matrix (4, 4) from world to camera, by default None.
-        Returns
-        -------
-        T_world_camera: NDArray[np.float64]
-            transformation matrix (4, 4) from world to camera.
-        """
-        # down sample the point cloud
-        downsampled, tree = small_gicp.preprocess_points(
-            raw_points,
-            self.voxel_downsampling_resolutions,
-            num_threads=self.num_threads,
-        )
-
-        # first frame
-        if self.previous_pcd is None:
-            self.previous_pcd = downsampled
-            self.previous_tree = tree
-            self.T_world_camera = init_pose if init_pose is not None else np.identity(4)
-            return self.T_world_camera
-
-        result: small_gicp.RegistrationResult = small_gicp.align(
-            self.previous_pcd,
-            downsampled,
-            self.previous_tree,
-            init_T_target_source=self.T_last_current,
-            max_correspondence_distance=self.max_corresponding_distance,
-            registration_type=self.registration_type,
-            num_threads=self.num_threads,
-            # max_iterations=self.max_iterations,
-        )
-        self.T_last_current = result.T_target_source
-        # Update the world transformation matrix
-        self.T_world_camera = self.T_world_camera @ result.T_target_source
-
-        # Update the previous point cloud and its tree for the next iteration
-        self.previous_pcd = downsampled
-        self.previous_tree = tree
-
-        # return self.T_world_camera
-        return result
-
-    def keyframe(self) -> bool:
-        if self.previous_pcd is None:
-            raise ValueError("No previous point cloud to set as keyframe.")
-
-        if self.kf_pcd is None:
-            # update keyframe
-            self.kf_pcd = self.previous_pcd
-            self.kf_tree = self.previous_tree
-            self.kf_T_last_current = self.T_last_current
-            return True
-
-        result: small_gicp.RegistrationResult = small_gicp.align(
-            self.kf_pcd,
-            self.previous_pcd,
-            self.kf_tree,
-            init_T_target_source=self.kf_T_last_current,
-            max_correspondence_distance=self.max_corresponding_distance,
-            registration_type=self.registration_type,
-            num_threads=self.num_threads,
-            # max_iterations=self.max_iterations,
-        )
-
-        if result.error > self.error_threshold:
-            # update keyframe
-            self.kf_pcd = self.previous_pcd
-            self.kf_tree = self.previous_tree
-            self.kf_T_last_current = self.T_last_current
-            print(f"kf factor error: {result.error}")
-            return True
-        print(f"not kf factor error: {result.error}")
-        return False
+        if self.backend == "open3d" and self.registration_type == "HYBRID":
+            self.o3d_device = o3d.core.Device("CUDA:0")
+            self.criteria_list = [
+                o3d.t.pipelines.odometry.OdometryConvergenceCriteria(500),
+                o3d.t.pipelines.odometry.OdometryConvergenceCriteria(500),
+                o3d.t.pipelines.odometry.OdometryConvergenceCriteria(500),
+            ]
+            self.last_rgbd = None
+            self.max_depth = 100.0
+            self.depth_scale = 1.0
 
     # NOTE: following is the align_pcd_gt_pose with true T_last_current estimate
     def align(
@@ -278,11 +203,50 @@ class Scan2ScanICP:
                 relative_fitness=1e-6, relative_rmse=1e-6, max_iteration=100
             ),
         )
-
-        # 更新世界变换矩阵
         self.T_world_camera = self.T_world_camera @ reg.transformation
-
-        # 更新前一帧的点云
         self.previous_pcd = downsampled
+
+        return self.T_world_camera
+
+    def align_o3d_hybrid(
+        self,
+        image: NDArray[np.float64],
+        depth: NDArray[np.float64],
+        Ks: NDArray,
+        init_gt_pose: NDArray[np.float64] | None = None,
+        T_last_current: NDArray[np.float64] = np.identity(4),
+    ):
+
+        rgbd = o3d.t.geometry.RGBDImage(
+            o3d.t.geometry.Image(np.ascontiguousarray(image)).to(self.o3d_device),
+            o3d.t.geometry.Image(np.ascontiguousarray(depth)).to(self.o3d_device),
+        )
+
+        if self.last_rgbd is None:
+            self.last_rgbd = rgbd
+            self.T_world_camera = (
+                init_gt_pose if init_gt_pose is not None else np.identity(4)
+            )
+            return self.T_world_camera
+
+        rel_transform = o3d.t.pipelines.odometry.rgbd_odometry_multi_scale(
+            self.last_rgbd,
+            rgbd,
+            o3d.core.Tensor(Ks, dtype=o3d.core.Dtype.Float64),
+            o3d.core.Tensor(T_last_current),
+            self.depth_scale,
+            self.max_depth,
+            self.criteria_list,
+            o3d.t.pipelines.odometry.Method.Hybrid,
+        )
+
+        # Adjust for the coordinate system difference
+        rel_transform = rel_transform.transformation.cpu().numpy()
+        rel_transform[0, [1, 2, 3]] *= -1
+        rel_transform[1, [0, 2, 3]] *= -1
+        rel_transform[2, [0, 1, 3]] *= -1
+
+        self.T_world_camera = self.T_world_camera @ rel_transform
+        self.last_rgbd = rgbd.clone()
 
         return self.T_world_camera
