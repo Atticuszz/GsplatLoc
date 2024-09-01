@@ -4,11 +4,10 @@ from typing import Literal, NamedTuple
 import numpy as np
 
 from src.component import Scan2ScanICP
-from src.data.dataset import Replica, get_data_set
+from src.data.dataset import get_data_set
 from src.data.Image import RGBDImage
 from src.eval.logger import WandbLogger
 from src.eval.utils import calculate_rotation_error_np, calculate_translation_error_np
-from src.my_gsplat.geometry import depth_to_normal
 
 
 class RegistrationConfig(NamedTuple):

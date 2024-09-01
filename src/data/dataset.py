@@ -8,7 +8,6 @@ import torch
 from natsort import natsorted
 
 from ..my_gsplat.geometry import compute_depth_gt, transform_points
-
 from .base import AlignData
 from .Image import RGBDImage
 from .normalize import normalize_2C
