@@ -2,10 +2,8 @@ import numpy as np
 from numpy.typing import NDArray
 from torch import Tensor
 
-from src.data.base import DEVICE
 from src.data.utils import to_tensor
 from src.my_gsplat.geometry import depth_to_points
-from src.my_gsplat.utils import remove_outliers
 
 
 class RGBDImage:
@@ -24,17 +22,17 @@ class RGBDImage:
             raise ValueError(
                 "RGB's height and width must match Depth's height and width."
             )
-        self._rgb = to_tensor(rgb, device=DEVICE)
-        self._depth = to_tensor(depth, device=DEVICE)
-        self._K = to_tensor(K, device=DEVICE)
-        self._pose = to_tensor(pose, device=DEVICE)
+        self._rgb = to_tensor(rgb)
+        self._depth = to_tensor(depth)
+        self._K = to_tensor(K)
+        self._pose = to_tensor(pose)
         self._pcd = depth_to_points(self._depth, self._K)
 
         # NOTE: remove outliers
-        self._pcd, inlier_mask = remove_outliers(self._pcd, verbose=False)
-        self._colors = (self._rgb / 255.0).reshape(-1, 3)[inlier_mask]  # N,3
+        # self._pcd, inlier_mask = remove_outliers(self._pcd, verbose=False)
+        # self._colors = (self._rgb / 255.0).reshape(-1, 3)[inlier_mask]  # N,3
 
-        # self._colors = (self._rgb / 255.0).reshape(-1, 3)  # N,3
+        self._colors = (self._rgb / 255.0).reshape(-1, 3)  # N,3
 
     @property
     def size(self):

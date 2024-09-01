@@ -1,8 +1,14 @@
+import json
+import pathlib
 import random
+import shutil
 
+import kornia
 import numpy as np
 import torch
+import yaml
 from numpy.typing import NDArray
+from torch import Tensor
 
 
 def calculate_translation_error_np(
@@ -166,3 +172,81 @@ def set_random_seed(seed: int):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+
+
+def compute_silhouette_diff(depth: Tensor, rastered_depth: Tensor) -> Tensor:
+    """
+    Compute the difference between the sobel edges of two depth images.
+
+    Parameters
+    ----------
+    depth : torch.Tensor
+        The depth image with dimensions [height, width].
+    rastered_depth : torch.Tensor
+        The depth image with dimensions [height, width].
+
+    Returns
+    -------
+    torch.Tensor
+        The silhouette difference between the two depth images with dimensions [height, width].
+    """
+    if depth.dim() == 2:
+        depth = depth.unsqueeze(0).unsqueeze(0)
+    else:
+        depth = depth.unsqueeze(1)
+    if rastered_depth.dim() == 2:
+        rastered_depth = rastered_depth.unsqueeze(0).unsqueeze(0)
+    else:
+        rastered_depth = rastered_depth.unsqueeze(1)
+    edge_depth = kornia.filters.sobel(depth)
+    edge_rastered_depth = kornia.filters.sobel(rastered_depth)
+    silhouette_diff = torch.abs(edge_depth - edge_rastered_depth).squeeze()
+    return silhouette_diff
+
+
+def count_images(media_dir):
+    image_extensions = {".png", ".jpg", ".jpeg", ".gif", ".bmp"}
+    return sum(
+        1 for file in media_dir.glob("**/*") if file.suffix.lower() in image_extensions
+    )
+
+
+def clean_wandb_runs(wandb_dir):
+    wandb_path = pathlib.Path(wandb_dir)
+
+    for run_dir in wandb_path.iterdir():
+        if not run_dir.is_dir():
+            continue
+
+        config_path = run_dir / "files" / "config.yaml"
+        summary_path = run_dir / "files" / "wandb-summary.json"
+        media_dir = run_dir / "files" / "media"
+        # 检查 config.yaml 是否存在并包含正确的 dataset 值
+        if config_path.exists():
+            with open(config_path) as config_file:
+                config = yaml.safe_load(config_file)
+                dataset_value = config.get("dataset", {}).get("value")
+                if dataset_value != "Replica":
+                    continue
+        else:
+            continue
+
+        # 检查 wandb-summary.json 中的 _step 值
+        if summary_path.exists():
+            with open(summary_path) as summary_file:
+                summary = json.load(summary_file)
+                step_value = summary.get("_step")
+                if step_value is None or step_value >= 1900:
+                    continue
+        else:
+            continue
+
+        # 检查并打印 media 目录下图片数量
+        if media_dir.exists():
+            image_count = count_images(media_dir)
+            if image_count > 1900:
+                print(f"Run with more than 1900 images: {run_dir}")
+                print(f"Image count: {image_count}")
+                continue
+        print(f"Removing run directory: {run_dir}")
+        shutil.rmtree(run_dir)

@@ -4,21 +4,20 @@ from typing import Literal, NamedTuple
 import numpy as np
 
 from src.component import Scan2ScanICP
-from src.data.dataset import Replica
+from src.data.dataset import get_data_set
 from src.data.Image import RGBDImage
 from src.eval.logger import WandbLogger
 from src.eval.utils import calculate_rotation_error_np, calculate_translation_error_np
-
-# from src.pose_estimation.train_eval import train_model_with_adam, train_model_with_LBFGS
 
 
 class RegistrationConfig(NamedTuple):
     max_corresponding_distance: float = 0.1
     num_threads: int = 32
-    registration_type: Literal["ICP", "PLANE_ICP", "GICP", "COLORED_ICP"] = "GICP"
+    registration_type: Literal["ICP", "PLANE_ICP", "GICP", "COLORED_ICP", "HYBRID"] = (
+        "GICP"
+    )
     voxel_downsampling_resolutions: float | None = None
-    # grid_downsample_resolution: int | None = None
-    # for gicp estimate normals and covs 10 is the best after tests
+    implementation: str | None = None
     # knn: int = 10
 
     def as_dict(self):
@@ -27,7 +26,7 @@ class RegistrationConfig(NamedTuple):
 
 class WandbConfig(NamedTuple):
     algorithm: str = "GICP"
-    dataset: str = "Replica"
+    dataset: Literal["TUM", "Replica"] = "Replica"
     sub_set: str = "office0"
     description: str = "GICP on Replica dataset"
     normalize: bool = True
@@ -71,13 +70,12 @@ class ICPExperiment(ExperimentBase):
             wandb_config=wandb_config,
             extra_config=registration_config.as_dict(),
         ),
-        self.data = Replica(wandb_config.sub_set)
+        self.data = get_data_set(name=wandb_config.dataset, room=wandb_config.sub_set)
         # self.grid_downsample = registration_config.grid_downsample_resolution
         # self.knn = registration_config.knn
 
     def run(self, max_images: int = 2000):
 
-        pre_pose = None
         for i, rgbd_image in enumerate(self.data):
 
             # print(f"Processing image {i + 1}/{len(data)}...")
@@ -87,25 +85,47 @@ class ICPExperiment(ExperimentBase):
                 raise ValueError("Pose is not available.")
             pre_pose = rgbd_image.pose.cpu().numpy()
             pose_gt = rgbd_image.pose.cpu().numpy()
-            if self.backends.registration_type == "COLORED_ICP":
-                new_pcd = np.concatenate(
-                    (rgbd_image.points.cpu().numpy(), rgbd_image.colors.cpu().numpy()),
-                    axis=1,
+
+            if self.backends.registration_type != "HYBRID":
+                new_pcd = (
+                    rgbd_image.points.cpu().numpy()
+                    if self.backends.registration_type != "COLORED_ICP"
+                    else np.concatenate(
+                        (
+                            rgbd_image.points.cpu().numpy(),
+                            rgbd_image.colors.cpu().numpy(),
+                        ),
+                        axis=1,
+                    )
                 )
+                # NOTE: align interface
+                if i == 0:
+                    # res = self.backends.align(new_pcd, rgbd_image.pose)
+                    res = self.backends.align(new_pcd, pose_gt)
+                    continue
+                else:
+                    T_last_current = pose_gt @ np.linalg.inv(pre_pose)
+                    self.backends.T_world_camera = pre_pose
+                    # res = self.backends.align(new_pcd, T_last_current, knn=self.knn)
+                    res = self.backends.align(new_pcd, T_last_current)
             else:
-                new_pcd = rgbd_image.points.cpu().numpy()
+                # NOTE: align interface
+                image = rgbd_image.rgbs.cpu().numpy() / 255.0
+                depth = rgbd_image.depth.cpu().numpy()
+                if i == 0:
+                    # res = self.backends.align(new_pcd, rgbd_image.pose)
 
-            # NOTE: align interface
-            if i == 0:
-                # res = self.backends.align(new_pcd, rgbd_image.pose)
-                res = self.backends.align(new_pcd, pose_gt)
-                continue
-            else:
-                T_last_current = pose_gt @ np.linalg.inv(pre_pose)
-                self.backends.T_world_camera = pre_pose
-                # res = self.backends.align(new_pcd, T_last_current, knn=self.knn)
-                res = self.backends.align(new_pcd, T_last_current)
-
+                    res = self.backends.align_o3d_hybrid(
+                        image, depth, self.data.K, pose_gt
+                    )
+                    continue
+                else:
+                    T_last_current = pose_gt @ np.linalg.inv(pre_pose)
+                    self.backends.T_world_camera = pre_pose
+                    # res = self.backends.align(new_pcd, T_last_current, knn=self.knn)
+                    res = self.backends.align_o3d_hybrid(
+                        image, depth, self.data.K, pose_gt, T_last_current
+                    )
             # NOTE: align data
             # self.logger.log_align_error(res.error, i)
             # self.logger.log_iter_times(res.iterations, i)

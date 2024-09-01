@@ -7,8 +7,7 @@ import numpy as np
 import torch
 from natsort import natsorted
 
-from src.my_gsplat.geometry import compute_depth_gt, transform_points
-
+from ..my_gsplat.geometry import compute_depth_gt, transform_points
 from .base import AlignData
 from .Image import RGBDImage
 from .normalize import normalize_2C
@@ -320,6 +319,15 @@ class TUM(BaseDataset):
         pose[:3, :3] = Rotation.from_quat(pvec[3:]).as_matrix()
         pose[:3, 3] = pvec[:3]
         return pose
+
+
+def get_data_set(name: Literal["TUM", "Replica"], room: str):
+    if name == "TUM":
+        return TUM(room)
+    elif name == "Replica":
+        return Replica(room)
+    else:
+        raise ValueError("data set name should be in ['TUM,Replica']")
 
 
 class Parser:
