@@ -18,7 +18,7 @@ from .utils import calculate_RMSE_np, compute_silhouette_diff
 
 
 class WandbLogger:
-    def __init__(self, run_name: str | None = None, config: dict = None):
+    def __init__(self, run_name: str | None = None, config: dict | None = None):
         """
         Initialize the Weights & Biases logging.
         use wandb login with api key https://wandb.ai/authorize, then wandb login --relogin
@@ -29,9 +29,9 @@ class WandbLogger:
         else:
             run_name = run_name
         self.entity = "supavision"
-        self.project = "ABGICP"
+        # self.project = "ABGICP"
         # self.entity = "atticuszz"
-        # self.project = "GspaltLoc"
+        self.project = "GspaltLoc"
         wandb.init(
             project=self.project,
             entity=self.entity,

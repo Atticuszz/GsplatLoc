@@ -15,4 +15,3 @@ if __name__ == "__main__":
     # log.plot_RMSE(f"baseline_{baseline}")
     # log.load_history()
     log.load_history()
-    

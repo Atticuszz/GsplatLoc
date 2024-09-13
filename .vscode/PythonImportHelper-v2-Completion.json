@@ -7008,7 +7008,7 @@
         "kind": 6,
         "importPath": "src.eval.logger",
         "description": "src.eval.logger",
-        "peekOfCode": "class WandbLogger:\n    def __init__(self, run_name: str | None = None, config: dict = None):\n        \"\"\"\n        Initialize the Weights & Biases logging.\n        use wandb login with api key https://wandb.ai/authorize, then wandb login --relogin\n        wandb login --cloud\n        \"\"\"\n        if run_name is None:\n            run_name = datetime.now().strftime(\"%Y-%m-%d_%H-%M-%S\")\n        else:",
+        "peekOfCode": "class WandbLogger:\n    def __init__(self, run_name: str | None = None, config: dict | None = None):\n        \"\"\"\n        Initialize the Weights & Biases logging.\n        use wandb login with api key https://wandb.ai/authorize, then wandb login --relogin\n        wandb login --cloud\n        \"\"\"\n        if run_name is None:\n            run_name = datetime.now().strftime(\"%Y-%m-%d_%H-%M-%S\")\n        else:",
         "detail": "src.eval.logger",
         "documentation": {}
     },
