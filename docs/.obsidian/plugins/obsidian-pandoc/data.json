@@ -1,0 +1,15 @@
+{
+  "showCLICommands": true,
+  "addExtensionsToInternalLinks": "html",
+  "injectAppCSS": "dark",
+  "injectThemeCSS": false,
+  "customCSSFile": null,
+  "displayYAMLFrontmatter": false,
+  "linkStrippingBehaviour": "link",
+  "highDPIDiagrams": true,
+  "pandoc": null,
+  "pdflatex": "xelatex",
+  "outputFolder": null,
+  "extraArguments": "--mathjax  --citeproc\n--template=template.tex\n\n--filter=table_filter.py\n",
+  "exportFrom": "md"
+}

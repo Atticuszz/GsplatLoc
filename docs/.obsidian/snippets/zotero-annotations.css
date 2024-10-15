@@ -1,0 +1,43 @@
+/* Red */
+.callout[data-callout-metadata="#ff6666"] {
+  --callout-color: 205, 52, 92;
+}
+
+/* Green */
+.callout[data-callout-metadata="#5fb236"] {
+  --callout-color: 114, 162, 100;
+}
+
+/* Blue */
+.callout[data-callout-metadata="#2ea8e5"] {
+  --callout-color: 52, 82, 255;
+}
+
+/* Purple */
+.callout[data-callout-metadata="#a28ae5"] {
+  --callout-color: 157, 131, 242;
+}
+
+/* Orange */
+.callout[data-callout-metadata="#f19837"] {
+  --callout-color: 244, 164, 96;
+}
+
+/* Yellow */
+.callout[data-callout-metadata="#ffd400"] {
+  --callout-color: 255, 236, 0;
+}
+
+/* Magenta */
+.callout[data-callout-metadata="#e56eee"] {
+  --callout-color: 255, 33, 255;
+}
+
+/* Gray */
+.callout[data-callout-metadata="#aaaaaa"] {
+  --callout-color: 152, 152, 152;
+}
+
+.callout-icon {
+  display: none;
+}

@@ -1,0 +1,28 @@
+{
+  "database": "Zotero",
+  "noteImportFolder": "essay/zotero/notes/{{citekey}}.md",
+  "pdfExportImageDPI": 120,
+  "pdfExportImageFormat": "jpg",
+  "pdfExportImageQuality": 100,
+  "citeFormats": [
+    {
+      "name": "citation",
+      "format": "pandoc",
+      "brackets": true
+    }
+  ],
+  "exportFormats": [
+    {
+      "name": "import annotations",
+      "outputPathTemplate": "essay/zotero/annotations/{{citekey}}.md",
+      "imageOutputPathTemplate": "assets/{{citekey}}/",
+      "imageBaseNameTemplate": "{{citekey}}",
+      "templatePath": "essay/zotero/zotero-import-templates.md",
+      "cslStyle": "ieee"
+    }
+  ],
+  "citeSuggestTemplate": "[[{{citekey}}]]",
+  "openNoteAfterImport": true,
+  "whichNotesToOpenAfterImport": "first-imported-note",
+  "shouldConcat": true
+}

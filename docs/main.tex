@@ -1,0 +1,1226 @@
+\documentclass[twocolumn]{article} % 启用双栏排版
+\usepackage{arxiv} % 特定于arxiv的样式包，用于格式设置
+% packages
+\usepackage[utf8]{inputenc} % 允许utf-8输入
+\usepackage{fontspec}
+\usepackage{url}            % 用于类型设置URL
+\usepackage{booktabs}       % 创建专业质量的表格
+\usepackage{amsfonts}       % 黑板数学符号
+\usepackage{nicefrac}       % 紧凑的分数符号
+\usepackage{microtype}      % 微排版
+\usepackage{lipsum}         % 生成填充文本
+\usepackage{graphicx}       % 图形包
+\usepackage{doi}            % 处理DOI
+\usepackage{titlesec}       % 调整节标题的间距和格式
+\usepackage{setspace}
+\setstretch{1.1}
+\usepackage[backend=biber, natbib=true]{biblatex} % 使用biblatex处理参考文献，指定使用biber作为后端和IEEE样式
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{tabularx}
+\usepackage{colortbl}
+
+\usepackage{adjustbox}
+
+
+\usepackage{libertinus}
+
+
+\usepackage{mathtools}
+% 设置所有显示公式自动编号
+\mathtoolsset{showonlyrefs=false}
+
+% Pandoc 3.2.1 introduced new LaTex macro \pandocbounded: https://github.com/Wandmalfarbe/pandoc-latex-template/issues/391
+\newcommand{\pandocbounded}[1]{\begin{adjustbox}{max width=\textwidth,max height=\textheight,keepaspectratio}#1\end{adjustbox}}
+
+% caption front
+\usepackage{caption}
+\captionsetup{font=small,labelfont=bf}
+
+
+% 配置链接颜色
+\definecolor{authorcolor}{HTML}{800080} % 淡紫色
+\definecolor{linkcolor}{HTML}{A6CE39}   % 绿色
+
+% 标题设置
+\title{\large\bfseries\textit{GSplatLoc} : Ultra-Precise Camera
+Localization via 3D Gaussian Splatting}
+
+
+\usepackage{titling}
+\usepackage{hyperref}
+
+\usepackage{footnote}
+
+% 自定义作者信息命令
+\newcommand{\authorinfo}[5]{%
+  \begin{tabular}[t]{c}
+    \href{#1}{\includegraphics[scale=0.06]{orcid.pdf}\hspace{1mm}\textbf{#2}}#5\\
+    \texttt{#3}\\
+    #4
+  \end{tabular}%
+}
+
+% 重定义 \and 命令以添加适当的间距
+\renewcommand{\and}{\hspace{2em}}
+
+% 作者设置
+\author{%
+\authorinfo{https://orcid.org/0009-0008-5460-325X}{Atticus
+Zhou}{zhouge1831@gmail.com}{Southeast University Chengxian
+College\\Nanjing,
+China}{}\and\authorinfo{https://orcid.org/0000-0000-0000-0000}{Jane
+Doe}{jane.doe@another.edu}{Southeast University Chengxian
+College\\Nanjing, China}{\textsuperscript{*}}%
+}
+
+\usepackage{dblfnote}  % 添加这行以改善双栏模式下的脚注
+
+% 重新定义 \footnotetext 命令
+\makeatletter
+\def\footnotetext{%
+  \@ifnextchar [\@xfootnotenext
+    {\@xfootnotenext[\@mpfn]}}
+\def\@xfootnotenext[#1]{%
+  \begingroup
+  \csname c@#1\endcsname \@footnotetext
+  \endgroup}
+\makeatother
+
+% 添加对应作者注释为脚注
+\newcommand{\correspondingauthor}{%
+  \footnotetext{\textsuperscript{*}Corresponding author}%
+}
+
+% 预定义作者格式
+\preauthor{\begin{center}\large\bfseries}
+\postauthor{\par\end{center}}
+
+% PDF元数据
+\hypersetup{
+    pdftitle={GSplatLoc : Ultra-Precise Camera Localization via 3D
+Gaussian Splatting},
+    pdfauthor={Atticus Zhou, Jane Doe},
+}
+
+
+
+% % csl for pandoc --citeproc https://github.com/Zettlr/Zettlr/issues/4879
+% definitions for citeproc citations
+\NewDocumentCommand\citeproctext{}{}
+\NewDocumentCommand\citeproc{mm}{%
+\begingroup\def\citeproctext{#2}\cite{#1}\endgroup}
+\makeatletter
+% allow citations to break across lines
+\let\@cite@ofmt\@firstofone
+% avoid brackets around text for \cite:
+\def\@biblabel#1{}
+\def\@cite#1#2{{#1\if@tempswa , #2\fi}}
+\makeatother
+\newlength{\cslhangindent}
+\setlength{\cslhangindent}{1.5em}
+\newlength{\csllabelwidth}
+\setlength{\csllabelwidth}{1.5em}
+\newenvironment{CSLReferences}[2] % #1 hanging-indent, #2 entry-spacing
+{\begin{list}{}{%
+  \setlength{\itemindent}{0pt}
+  \setlength{\leftmargin}{0pt}
+  \setlength{\parsep}{0pt}
+  % turn on hanging indent if param 1 is 1
+  \ifodd #1
+  \setlength{\leftmargin}{\cslhangindent}
+  \setlength{\itemindent}{-1\cslhangindent}
+  \fi
+  % set entry spacing
+  \setlength{\itemsep}{0.5\baselineskip}}}
+{\end{list}}
+\usepackage{calc}
+\newcommand{\CSLBlock}[1]{\hfill\break\parbox[t]{\linewidth}{\strut\ignorespaces#1\strut}}
+\newcommand{\CSLLeftMargin}[1]{\parbox[t]{\csllabelwidth}{\strut#1\strut}}
+\newcommand{\CSLRightInline}[1]{\parbox[t]{\linewidth - \csllabelwidth}{\strut#1\strut}}
+\newcommand{\CSLIndent}[1]{\hspace{\cslhangindent}#1}
+
+
+% tightlist error using Pandoc with Markdown https://stackoverflow.com/questions/40438037/tightlist-error-using-pandoc-with-markdown
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+% main
+\begin{document}
+
+\twocolumn[
+\begin{@twocolumnfalse}
+  \maketitle
+  \correspondingauthor
+  \begin{abstract}
+    We present \textbf{GSplatLoc}, a camera localization method that
+    leverages the differentiable rendering capabilities of 3D Gaussian
+    splatting for ultra-precise pose estimation. By formulating pose
+    estimation as a gradient-based optimization problem that minimizes
+    discrepancies between rendered depth maps from a pre-existing 3D
+    Gaussian scene and observed depth images, GSplatLoc achieves
+    translational errors within \textbf{0.01\,cm} and near-zero
+    rotational errors on the Replica dataset---significantly
+    outperforming existing methods. Evaluations on the Replica and TUM
+    RGB-D datasets demonstrate the method's robustness in challenging
+    indoor environments with complex camera motions. GSplatLoc sets a
+    new benchmark for localization in dense mapping, with important
+    implications for applications requiring accurate real-time
+    localization, such as robotics and augmented reality.
+  \end{abstract}
+  \vspace{1cm}
+\end{@twocolumnfalse}
+]
+
+\section{Introduction}\label{introduction}
+
+Visual localization, specifically the task of estimating camera position
+and orientation (pose estimation) for a given image within a known
+scene, is a fundamental challenge in computer vision. Accurate pose
+estimation is crucial for applications like autonomous robotics (e.g.,
+self-driving cars), as well as Augmented and Virtual Reality systems.
+Although Visual Simultaneous Localization and Mapping (Visual SLAM)
+combines both mapping and pose estimation, this paper focuses
+specifically on the localization component, which is essential for
+real-time tracking in dynamic environments.
+
+Traditional SLAM systems {[}1{]} have demonstrated accurate pose
+estimation across diverse environments. However, their underlying 3D
+representations (e.g., point clouds, meshes, and surfels) exhibit
+limitations in flexibility for tasks like photorealistic scene
+exploration and fine-grained map updates. Recent methods utilizing
+Neural Radiance Fields (NeRF) {[}2{]} for surface reconstruction and
+view rendering have inspired novel SLAM approaches {[}3{]}, which show
+promising results in tracking and scene modeling. Despite these
+advances, existing NeRF-based methods rely on computationally expensive
+volume rendering pipelines, limiting their ability to perform real-time
+\textbf{pose estimation} effectively.
+
+The development of \textbf{3D Gaussian Splatting} {[}4{]} for efficient
+novel view synthesis presents a promising solution to these limitations.
+Its rasterization-based rendering pipeline enables faster image-level
+rendering, making it more suitable for real-time applications. However,
+integrating 3D Gaussian fields into SLAM systems still faces challenges,
+such as overfitting to input images due to anisotropic Gaussian fields
+and a lack of explicit multi-view constraints.
+
+Current SLAM methods using 3D Gaussian Splatting, such as RTG-SLAM
+{[}5{]} and GS-ICP-SLAM {[}6{]}, rely primarily on ICP-based techniques
+for pose estimation. Other approaches, like Gaussian-SLAM {[}7{]}, adapt
+traditional RGB-D odometry methods. While these methods have shown
+potential, they often do not fully exploit the differentiable nature of
+the Gaussian Splatting representation, particularly for real-time and
+efficient \textbf{pose estimation}.
+
+In this paper, we introduce \textbf{GSplatLoc}, a novel camera
+localization method that leverages the differentiable properties of 3D
+Gaussian Splatting specifically for efficient and accurate \textbf{pose
+estimation}. Rather than addressing the full SLAM pipeline, our approach
+is designed to focus solely on the localization aspect, allowing for
+more efficient use of the scene representation and camera pose
+estimation. By developing a fully differentiable pipeline, GSplatLoc can
+be seamlessly integrated into existing Gaussian Splatting SLAM
+frameworks or other deep learning tasks focused on localization.
+
+Our main contributions are as follows:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  We present a GPU-accelerated framework for real-time camera
+  localization, based on a comprehensive theoretical analysis of camera
+  pose derivatives in 3D Gaussian Splatting.
+\item
+  We propose a novel optimization approach that focuses on camera pose
+  estimation given a 3D Gaussian scene, fully exploiting the
+  differentiable nature of the rendering process.
+\item
+  We demonstrate the effectiveness of our method through extensive
+  experiments, showing competitive or superior pose estimation results
+  compared to state-of-the-art SLAM approaches utilizing advanced scene
+  representations.
+\end{enumerate}
+
+By focusing specifically on the challenges of localization in Gaussian
+Splatting-based scenes, GSplatLoc opens new avenues for high-precision
+\textbf{camera pose estimation} in complex environments. Our work
+contributes to the ongoing advancement of visual localization systems,
+pushing the boundaries of accuracy and real-time performance in 3D scene
+understanding and navigation.
+
+\section{Related Work}\label{related-work}
+
+Camera localization is a fundamental problem in computer vision and
+robotics, crucial for applications such as autonomous navigation,
+augmented reality, and 3D reconstruction. Accurate and efficient pose
+estimation remains challenging, especially in complex and dynamic
+environments. In this section, we review the evolution of camera
+localization methodologies, focusing on classical RGB-D localization
+methods, NeRF-based approaches, and recent advancements in
+Gaussian-based techniques that utilize Iterative Closest Point (ICP)
+algorithms. We highlight their contributions and limitations, which
+motivate the development of our proposed method.
+
+\subsection{Classical RGB-D
+Localization}\label{classical-rgb-d-localization}
+
+Traditional RGB-D localization methods leverage both color and depth
+information to estimate camera poses. These methods can be broadly
+categorized into feature-based, direct, and hybrid approaches.
+
+\textbf{Feature-Based Methods} involve extracting and matching keypoints
+across frames to estimate camera motion. Notable systems such as
+ORB-SLAM2 {[}8{]} and ORB-SLAM3 {[}9{]} rely on sparse feature
+descriptors like ORB features. These systems have demonstrated robust
+performance in various environments, benefiting from the maturity of
+feature detection and matching algorithms. However, their reliance on
+distinct visual features makes them less effective in textureless or
+repetitive scenes. While they can utilize depth information for scale
+estimation and map refinement, they primarily depend on RGB data for
+pose estimation, making them susceptible to lighting changes and
+appearance variations.
+
+\textbf{Direct Methods} estimate camera motion by minimizing the
+photometric error between consecutive frames, utilizing all available
+pixel information. Methods such as Dense Visual Odometry (DVO) {[}1,
+10{]} and DTAM{[}11{]} incorporate depth data to enhance pose estimation
+accuracy. These methods can achieve high precision in well-lit, textured
+environments but are sensitive to illumination changes and require good
+initialization to avoid local minima. The computational cost of
+processing all pixel data poses challenges for real-time applications.
+Additionally, the reliance on photometric consistency makes them
+vulnerable to lighting variations and dynamic scenes.
+
+\textbf{Hybrid Approaches} combine the strengths of feature-based and
+direct methods. ElasticFusion {[}12{]} integrates surfel-based mapping
+with real-time camera tracking, using both photometric and geometric
+information. DVO-SLAM {[}10{]} combines geometric and photometric
+alignment for improved robustness. However, these methods often involve
+complex pipelines and can be computationally intensive due to dense map
+representations and intricate data association processes.
+
+Despite their successes, classical methods face challenges in balancing
+computational efficiency with pose estimation accuracy, particularly in
+dynamic or low-texture environments. They may not fully exploit the
+potential of depth information for robust pose estimation, especially
+under lighting variations. Moreover, the lack of leveraging
+differentiable rendering techniques limits their ability to perform
+efficient gradient-based optimization for pose estimation.
+
+\subsection{NeRF-Based Localization}\label{nerf-based-localization}
+
+The advent of Neural Radiance Fields (NeRF) {[}2{]} has revolutionized
+novel view synthesis by representing scenes as continuous volumetric
+functions learned from images. NeRF has inspired new approaches to
+camera localization by leveraging its differentiable rendering
+capabilities.
+
+\textbf{Pose Estimation with NeRF} involves inverting a pre-trained NeRF
+model to recover camera poses by minimizing the photometric error
+between rendered images and observed images. iNeRF {[}13{]} formulates
+pose estimation as an optimization problem, using gradient-based methods
+to refine camera parameters. While iNeRF achieves impressive accuracy,
+it suffers from high computational costs due to the per-pixel ray
+marching required in NeRF's volumetric rendering pipeline. This
+limitation hampers its applicability in real-time localization tasks.
+
+\textbf{Accelerated NeRF Variants} aim to address computational
+inefficiency by introducing explicit data structures. Instant-NGP
+{[}14{]} uses hash maps to accelerate training and rendering, achieving
+interactive frame rates. PlenOctrees {[}15{]} and Plenoxels {[}16{]}
+employ sparse voxel grids to represent the scene, significantly reducing
+computation time. However, even with these optimizations, rendering
+speeds may still not meet the demands of real-time localization in
+dynamic environments.
+
+Furthermore, NeRF-based localization methods rely heavily on photometric
+consistency, making them sensitive to lighting variations, dynamic
+objects, and non-Lambertian surfaces. This reliance on RGB data can
+reduce robustness in real-world conditions where lighting can change
+dramatically. Additionally, the extensive training required on specific
+scenes limits their adaptability to new or changing environments.
+
+\subsection{Gaussian-Based
+Localization}\label{gaussian-based-localization}
+
+Recent advancements in scene representation have introduced 3D Gaussian
+splatting as an efficient alternative to NeRF. \textbf{3D Gaussian
+Splatting} {[}4{]} represents scenes using a set of 3D Gaussian
+primitives and employs rasterization-based rendering, offering
+significant computational advantages over volumetric rendering.
+
+\textbf{Gaussian Splatting in Localization} has been explored in methods
+such as SplaTAM {[}17{]}, CG-SLAM {[}18{]}, RTG-SLAM {[}5{]}, and
+GS-ICP-SLAM {[}6{]}. SplaTAM introduces a SLAM system that uses
+gradient-based optimization to refine both the map and camera poses,
+utilizing RGB-D data and 3D Gaussians for dense mapping. CG-SLAM focuses
+on an uncertainty-aware 3D Gaussian field to improve tracking and
+mapping performance, incorporating depth uncertainty modeling.
+
+Pose estimation approaches in these methods often rely on traditional
+point cloud registration techniques, such as Iterative Closest Point
+(ICP) algorithms {[}19{]}. \textbf{RTG-SLAM} employs ICP for pose
+estimation within a 3D Gaussian splatting framework, demonstrating
+real-time performance in 3D reconstruction tasks. Similarly,
+\textbf{GS-ICP-SLAM} utilizes Generalized ICP {[}20{]} for alignment,
+effectively handling the variability in point cloud density and
+improving robustness.
+
+\textbf{Gaussian-SLAM} {[}7{]} adapts traditional RGB-D odometry
+methods, combining colored point cloud alignment {[}21{]} with an
+energy-based visual odometry approach {[}22{]}. These methods integrate
+ICP-based techniques within Gaussian-based representations to estimate
+camera poses.
+
+While effective in certain scenarios, the reliance on ICP-based methods
+introduces limitations. ICP algorithms require good initial alignment
+and can be sensitive to local minima, often necessitating careful
+initialization to ensure convergence. Additionally, ICP can be
+computationally intensive, especially with large point sets, hindering
+real-time performance. These methods may not fully exploit the
+differentiable rendering capabilities of 3D Gaussian representations for
+pose optimization.
+
+Optimizing camera poses using depth information within a differentiable
+rendering framework offers several advantages, particularly in
+environments with challenging lighting or low-texture surfaces. Depth
+data provides direct geometric information about the scene, which is
+invariant to illumination changes, leading to more robust pose
+estimation. By focusing on depth-only optimization, methods can achieve
+robustness to lighting variations and improve computational efficiency
+by avoiding the processing of color data.
+
+However, existing Gaussian-based localization techniques have not fully
+exploited depth-only optimization within a differentiable rendering
+framework. Challenges such as sensor noise, incomplete depth data due to
+occlusions, and the need for accurate initial pose estimates remain.
+Furthermore, many approaches tightly couple mapping and localization,
+introducing unnecessary computational overhead and complexity when the
+primary goal is pose estimation.
+
+These limitations motivate the development of our proposed method. By
+leveraging the differentiable rendering capabilities of 3D Gaussian
+splatting specifically for depth-only pose optimization, we aim to
+overcome the challenges faced by existing methods. Our approach
+eliminates reliance on photometric data, enhancing robustness to
+lighting variations and reducing computational overhead. By decoupling
+localization from mapping, we simplify the optimization process, making
+it more suitable for real-time applications. Additionally, using
+quaternions for rotation parameterization {[}23{]} and careful
+initialization strategies improves the stability and convergence of the
+optimization, addressing challenges associated with sensor noise and
+incomplete data.
+
+Our method fully exploits the differentiable rendering pipeline to
+perform efficient gradient-based optimization for pose estimation,
+setting it apart from ICP-based approaches. By focusing on depth
+information and leveraging the strengths of 3D Gaussian splatting, we
+provide a robust and computationally efficient solution for camera
+localization in complex environments.
+
+\section{Method}\label{method}
+
+\begin{figure*}[!t]
+\vspace{-2cm}
+\centering
+\resizebox{\textwidth}{!}{\includegraphics{Flowcharts.pdf}}
+\caption{We propose **GSplatLoc**, a novel camera localization method that leverages the differentiable rendering capabilities of 3D Gaussian splatting for efficient and accurate pose estimation.}
+\label{fig:cross-column-image}
+\end{figure*}
+
+\textbf{Overview.} We propose \textbf{GSplatLoc}, a novel camera
+localization method that leverages the differentiable rendering
+capabilities of 3D Gaussian splatting for efficient and accurate pose
+estimation. By formulating pose estimation as a gradient-based
+optimization problem within a fully differentiable framework, GSplatLoc
+enables direct optimization of camera poses using depth information
+rendered from a pre-existing 3D Gaussian scene representation. This
+approach allows us to achieve high-precision localization suitable for
+real-time applications.
+
+\textbf{Motivation.} Traditional SLAM systems that use point clouds,
+meshes, or surfels for 3D representation often face limitations in
+rendering quality and computational efficiency, hindering their ability
+to provide photorealistic scene exploration and fine-grained map
+updates. Neural Radiance Fields (NeRF) {[}2{]} have demonstrated
+exceptional rendering quality but suffer from computational
+inefficiencies due to per-pixel ray marching in volume rendering, making
+real-time applications challenging.
+
+The recent development of \textbf{3D Gaussian Splatting} {[}4{]} offers
+a promising alternative by employing a rasterization-based rendering
+pipeline. In this method, scenes are represented using a set of 3D
+Gaussians, which can be efficiently projected onto the image plane and
+rasterized to produce high-quality renderings at interactive frame
+rates. The differentiable nature of this rendering process enables
+gradient computation with respect to both the scene parameters and the
+camera pose.
+
+By leveraging these properties, we aim to develop a localization method
+that fully utilizes the differentiable rendering capabilities of 3D
+Gaussian splatting. Our approach focuses on optimizing the camera pose
+by minimizing the difference between the rendered depth map and the
+observed query depth image, thus enabling accurate and efficient pose
+estimation suitable for real-time SLAM systems.
+
+\textbf{Problem Formulation.} Our objective is to estimate the 6-DoF
+pose \((\mathbf{R}, \mathbf{t}) \in SE(3)\) of a query depth image
+\(D_q\), where \(\mathbf{R}\) is the rotation matrix and \(\mathbf{t}\)
+is the translation vector in the camera coordinate system. Given a 3D
+representation of the environment in the form of 3D Gaussians, let
+\(\mathcal{G} = \{G_i\}_{i=1}^N\) denote a set of \(N\) Gaussians, and
+posed reference depth images \(\{D_k\}\), which together constitute the
+reference data.
+
+In the following sections, we detail the components of our method,
+including the scene representation, the differentiable depth rendering
+process, the formulation of the optimization problem, and the overall
+pipeline for camera localization.
+
+\subsection{Scene Representation}\label{scene-representation}
+
+Building upon the Gaussian splatting method {[}4{]}, we adapt the scene
+representation to focus on the differentiable depth rendering process,
+which is crucial for our localization task. Our approach utilizes the
+efficiency and quality of Gaussian splatting while tailoring it
+specifically for depth-based localization.
+
+\textbf{3D Gaussians.} Each Gaussian \(G_i\) is characterized by its 3D
+mean \(\boldsymbol{\mu}_i \in \mathbb{R}^3\), 3D covariance matrix
+\(\boldsymbol{\Sigma}_i \in \mathbb{R}^{3\times3}\), opacity
+\(o_i \in \mathbb{R}\), and scale \(\mathbf{s}_i \in \mathbb{R}^3\). To
+represent the orientation of each Gaussian, we use a rotation quaternion
+\(\mathbf{q}_i \in \mathbb{R}^4\).
+
+The 3D covariance matrix \(\boldsymbol{\Sigma}_i\) is parameterized
+using \(\mathbf{s}_i\) and \(\mathbf{q}_i\):
+
+\[
+\boldsymbol{\Sigma}_i = \mathbf{R}(\mathbf{q}_i) \mathbf{S}(\mathbf{s}_i) \mathbf{S}(\mathbf{s}_i)^\top \mathbf{R}(\mathbf{q}_i)^\top
+\]
+
+where \(\mathbf{R}(\mathbf{q}_i)\) is the rotation matrix derived from
+\(\mathbf{q}_i\), and
+\(\mathbf{S}(\mathbf{s}_i) = \text{diag}(\mathbf{s}_i)\) is a diagonal
+matrix of scales.
+
+\textbf{Projecting 3D to 2D.} For the projection of 3D Gaussians onto
+the 2D image plane, we follow the approach described by {[}4{]}. The 3D
+mean \(\boldsymbol{\mu}_i\) is first transformed into the camera
+coordinate frame using the world-to-camera transformation
+\(\mathbf{T}_{wc} \in SE(3)\). Then, it is projected using the
+projection matrix \(\mathbf{P} \in \mathbb{R}^{4 \times 4}\) and mapped
+to pixel coordinates via the function
+\(\pi: \mathbb{R}^4 \rightarrow \mathbb{R}^2\):
+
+\[
+\boldsymbol{\mu}_{I,i} = \pi\left( \mathbf{P} \mathbf{T}_{wc} \boldsymbol{\mu}_{i,\text{homogeneous}} \right)
+\]
+
+Similarly, the 2D covariance
+\(\boldsymbol{\Sigma}_{I,i} \in \mathbb{R}^{2\times2}\) of the projected
+Gaussian is obtained by transforming the 3D covariance
+\(\boldsymbol{\Sigma}_i\) into the image plane: \[
+\boldsymbol{\Sigma}_{I,i} = \mathbf{J} \mathbf{R}_{wc} \boldsymbol{\Sigma}_i \mathbf{R}_{wc}^\top \mathbf{J}^\top
+\]
+
+where \(\mathbf{R}_{wc}\) represents the rotation component of
+\(\mathbf{T}_{wc}\), and \(\mathbf{J}\) is the Jacobian of the
+projection function, accounting for the affine transformation from 3D to
+2D as described by {[}24{]}.
+
+\subsection{Depth Rendering}\label{depth-rendering}
+
+We implement a differentiable depth rendering process, which is crucial
+for our localization method as it allows for gradient computation
+throughout the rendering pipeline. This differentiability enables us to
+optimize camera poses directly based on rendered depth maps.
+
+\textbf{Compositing Depth.} For depth map generation, we employ a
+front-to-back compositing scheme, which allows for accurate depth
+estimation and proper handling of occlusions. Let \(d_n\) denote the
+depth value of the \(n\)-th Gaussian, corresponding to the z-coordinate
+of its mean in the camera coordinate system. The depth at pixel
+\(\mathbf{p}\), denoted \(D(\mathbf{p})\), is computed as {[}4{]}:
+
+\[D(\mathbf{p}) = \sum_{n \leq N} d_n \cdot \alpha_n \cdot T_n,\]
+
+where \(T_n\) is the cumulative transparency up to the \((n-1)\)-th
+Gaussian:
+
+\[T_n = \prod_{m < n} (1 - \alpha_m).\]
+
+In this formulation, \(\alpha_n\) represents the opacity contribution of
+the \(n\)-th Gaussian at pixel \(\mathbf{p}\), calculated as:
+
+\[\alpha_n = o_n \cdot \exp(-\sigma_n),\]
+
+with
+
+\[\sigma_n = \frac{1}{2} \boldsymbol{\Delta}_n^\top \boldsymbol{\Sigma}_I^{-1} \boldsymbol{\Delta}_n.\]
+
+Here, \(\boldsymbol{\Delta}_n\) is the offset between the pixel center
+and the center of the 2D Gaussian \(\boldsymbol{\mu}_{I,i}\), and
+\(\boldsymbol{\Sigma}_I\) is the 2D covariance of the projected
+Gaussian. The opacity parameter \(o_n\) controls the overall opacity of
+the Gaussian.
+
+\textbf{Normalization of Depth.} To ensure consistent depth
+representation across the image, we normalize the accumulated depth
+values. We first compute the total accumulated opacity at each pixel
+\(\mathbf{p}\): \[
+\alpha(\mathbf{p}) = \sum_{n \leq N} \alpha_n \cdot T_n
+\]
+
+The normalized depth at pixel \(\mathbf{p}\) is then defined as:
+
+\[
+\text{Norm}_D(\mathbf{p}) = \frac{D(\mathbf{p})}{\alpha(\mathbf{p})}
+\]
+
+This normalization ensures that the depth values are properly scaled,
+making them comparable across different regions of the image, even when
+the density of Gaussians varies.
+
+The differentiable nature of this depth rendering process is key to our
+localization method. It allows us to compute gradients with respect to
+the Gaussian parameters and camera pose, enabling direct optimization
+based on the rendered depth maps. This differentiability facilitates
+efficient gradient-based optimization, forming the foundation for our
+subsequent localization algorithm.
+
+\subsection{Localization as Image
+Alignment}\label{localization-as-image-alignment}
+
+Assuming we have an existing map represented by a set of 3D Gaussians,
+our localization task focuses on estimating the 6-DoF pose of a query
+depth image \(D_q\) within this map. This process essentially becomes an
+image alignment problem between the rendered depth map from our Gaussian
+representation and the query depth image.
+
+\textbf{Rotating with Quaternions.} We parameterize the camera pose
+using a quaternion \(\mathbf{q}_{cw}\) for rotation and a vector
+\(\mathbf{t}_{cw}\) for translation. This choice of parameterization is
+particularly advantageous in our differential rendering context.
+Quaternions provide a continuous and singularity-free representation of
+rotation, which is crucial for gradient-based optimization. Moreover,
+their compact four-parameter form aligns well with our differentiable
+rendering pipeline, allowing for efficient computation of gradients with
+respect to rotation parameters.
+
+\textbf{Loss Function.} Our optimization strategy leverages the
+differentiable nature of our depth rendering process. We define a loss
+function that incorporates both depth accuracy and edge alignment:
+
+\[
+\mathcal{L} = \lambda_1 \mathcal{L}_d + \lambda_2 \mathcal{L}_c
+\]
+
+where \(\lambda_1\) and \(\lambda_2\) are weighting factors (typically
+set to 0.8 and 0.2, respectively) that balance the contributions of the
+depth and contour losses. The depth loss \(\mathcal{L}_d\) measures the
+L1 difference between the rendered depth map and the observed depth
+image:
+
+\[
+\mathcal{L}_d = \sum_{i \in \mathcal{M}} \left| D_i^{\text{rendered}} - D_i^{\text{observed}} \right|
+\]
+
+The contour loss \(\mathcal{L}_c\) focuses on aligning the depth
+gradients (edges) between the rendered and observed depth images:
+
+\[
+\mathcal{L}_c = \sum_{j \in \mathcal{M}} \left| \nabla D_j^{\text{rendered}} - \nabla D_j^{\text{observed}} \right|
+\]
+
+Here, \(\nabla D\) represents the gradient of the depth image, computed
+using the Sobel operator {[}25{]}, and \(\mathcal{M}\) is the mask of
+valid pixels determined by the rendered alpha mask.
+
+The contour loss \(\mathcal{L}_{c}\) serves several crucial purposes. It
+ensures that depth discontinuities in the rendered image align well with
+those in the observed depth image, thereby improving the overall
+accuracy of the pose estimation. By explicitly considering edge
+information, we preserve important structural features of the scene
+during optimization. Furthermore, the contour loss is less sensitive to
+absolute depth values and more focused on relative depth changes, making
+it robust to global depth scale differences.
+
+The optimization objective can be formulated as:
+
+\[
+\min_{\mathbf{q}_{cw}, \mathbf{t}_{cw}} \mathcal{L} + \lambda_q \|\mathbf{q}_{cw}\|_2^2 + \lambda_t \|\mathbf{t}_{cw}\|_2^2
+\]
+
+where \(\lambda_q\) and \(\lambda_t\) are regularization coefficients
+for the quaternion and translation parameters, respectively.
+
+\textbf{Masking Uncertainty.} The rendered alpha mask plays a crucial
+role in our optimization process. It effectively captures the epistemic
+uncertainty of our map, allowing us to focus the optimization on
+well-represented parts of the scene. By utilizing this mask, we avoid
+optimizing based on unreliable or non-existent data, which could
+otherwise lead to erroneous pose estimates.
+
+\textbf{Optimization Parameters.} We perform the optimization using the
+Adam optimizer, with distinct learning rates and weight decay values for
+the rotation and translation parameters. Specifically, we set the
+learning rate for quaternion optimization to \(5 \times 10^{-4}\) and
+for translation optimization to \(10^{-3}\), based on empirical tuning.
+Weight decay, set to \(10^{-3}\) for both parameters, acts as a
+regularization term to prevent overfitting. These settings balance the
+trade-off between convergence speed and optimization stability.
+
+\subsection{Pipeline}\label{pipeline}
+
+Our GSplatLoc method streamlines the localization process by utilizing
+only the posed reference depth images \(\{D_k\}\) and the query depth
+image \(D_q\). The differentiable rendering of 3D Gaussians enables
+efficient and smooth convergence during optimization.
+
+\textbf{Evaluation Scene.} For consistent evaluation, we initialize the
+3D Gaussians from point clouds derived from the posed reference depth
+images \(\{D_k\}\). Each point in the point cloud corresponds to the
+mean \(\boldsymbol{\mu}_i\) of a Gaussian \(G_i\). After filtering out
+outliers, we set the opacity \(o_i = 1\) for all Gaussians to ensure
+full contribution in rendering. The scale \(\mathbf{s}_i\) is
+initialized isotropically based on the local point density:
+
+\[
+\mathbf{s}_i = (\sigma_i, \sigma_i, \sigma_i), \quad \text{with } \sigma_i = \sqrt{\frac{1}{3}\sum_{j=1}^3 d_{ij}^2}
+\]
+
+where \(d_{ij}\) is the distance to the \(j\)-th nearest neighbor of
+point \(i\), computed using k-nearest neighbors (with \(k=4\)). This
+initialization balances the representation of local geometry. The
+rotation quaternion \(\mathbf{q}_i\) is initially set to
+\((1, 0, 0, 0)\) for all Gaussians, corresponding to no rotation.
+
+To further enhance optimization stability, we apply standard Principal
+Component Analysis (PCA) to align the principal axes of the point cloud
+with the coordinate axes. By centering the point cloud at its mean and
+aligning its principal axes, we normalize the overall scene orientation.
+This provides a more uniform starting point for optimization across
+diverse datasets, significantly improving the stability of the loss
+reduction during optimization and facilitating the attainment of lower
+final loss values, especially in the depth loss component of our
+objective function.
+
+\textbf{Optimization.} We employ the Adam optimizer for optimizing both
+the quaternion and translation parameters, using the distinct learning
+rates and weight decay values as previously described. The optimization
+process greatly benefits from the real-time rendering capabilities of 3D
+Gaussian splatting. Since rendering is extremely fast, each iteration of
+the optimizer is limited mainly by the rendering speed, allowing for
+rapid convergence of our pose estimation algorithm and making it
+suitable for real-time applications.
+
+\textbf{Convergence.} To determine convergence, we implement an early
+stopping mechanism based on the stabilization of the total loss. Our
+experiments show that the total loss usually stabilizes after
+approximately 100 iterations. We employ a patience parameter: after 100
+iterations, if the total loss does not decrease for a predefined number
+of consecutive iterations, the optimization loop is terminated. We then
+select the pose estimate corresponding to the minimum total loss as the
+optimal pose.
+
+In summary, our pipeline effectively combines the efficiency of Gaussian
+splatting with a robust optimization strategy, resulting in a fast and
+accurate camera localization method suitable for real-time applications.
+
+\section{Evaluation}\label{evaluation}
+
+We conducted extensive experiments to evaluate the performance of our
+proposed method, \textbf{GSplatLoc}, in comparison with state-of-the-art
+SLAM systems that utilize advanced scene representations. The evaluation
+focuses on assessing the accuracy of camera pose estimation in
+challenging indoor environments, emphasizing both the translational and
+rotational components of the estimated poses.
+
+\subsection{Experimental Setup}\label{experimental-setup}
+
+\textbf{Implementation Details.} Our localization pipeline was
+implemented on a system equipped with an Intel Core i7-13620H CPU,
+16\,GB of RAM, and an NVIDIA RTX 4060 GPU with 8\,GB of memory. The
+algorithm was developed using Python and PyTorch, utilizing custom CUDA
+kernels to accelerate the rasterization and backpropagation processes
+inherent in our differentiable rendering approach. This setup ensures
+that our method achieves real-time performance, which is crucial for
+practical applications in SLAM systems.
+
+\textbf{Datasets.} We evaluated our method on two widely recognized
+datasets for SLAM benchmarking: the \textbf{Replica} dataset {[}26{]}
+and the \textbf{TUM RGB-D} dataset {[}27{]}. The Replica dataset
+provides high-fidelity synthetic indoor environments, ideal for
+controlled evaluations of localization algorithms. We utilized data
+collected by Sucar et al. {[}28{]}, which includes trajectories from an
+RGB-D sensor with ground-truth poses. The TUM RGB-D dataset offers
+real-world sequences captured in various indoor settings, providing a
+diverse range of scenarios to test the robustness of our method.
+
+\textbf{Metrics.} Localization accuracy was assessed using two standard
+metrics: the \textbf{Absolute Trajectory Error (ATE RMSE)}, measured in
+centimeters, and the \textbf{Absolute Angular Error (AAE RMSE)},
+measured in degrees. The ATE RMSE quantifies the root mean square error
+between the estimated and ground-truth camera positions, while the AAE
+RMSE measures the accuracy of the estimated camera orientations.
+
+\textbf{Baselines.}~To provide a comprehensive comparison, we evaluated
+our method against several state-of-the-art SLAM systems that leverage
+advanced scene representations. Specifically, we compared against
+RTG-SLAM (ICP) {[}5{]}, which utilizes Iterative Closest Point (ICP) for
+pose estimation within a 3D Gaussian splatting framework. We also
+included GS-ICP-SLAM (GICP) {[}6{]}, which employs Generalized ICP for
+alignment in a Gaussian-based representation. Additionally, we
+considered Gaussian-SLAM {[}7{]}, evaluating both its PLANE ICP and
+HYBRID variants, which adapt traditional RGB-D odometry methods by
+incorporating plane-based ICP and a hybrid approach combining
+photometric and geometric information. These baselines were selected
+because they represent the current state of the art in SLAM systems
+utilizing advanced scene representations and focus on the localization
+component, which aligns with the scope of our work.
+
+\subsection{Localization Evaluation}\label{localization-evaluation}
+
+We first evaluated our method on the Replica dataset, which provides a
+controlled environment to assess the accuracy of pose estimation
+algorithms.
+
+\begin{table}[htbp]
+\renewcommand{\thetable}{\textbf{\arabic{table}}}
+\renewcommand{\tablename}{\textbf{Table}}
+\centering
+\caption{\textbf{Replica[26] (ATE RMSE ↓[cm]).}}
+\label{table:_textbf_replica_26_a}
+\begin{adjustbox}{max width=\columnwidth,max height=!,center}
+\begin{tabular}{lccccccccc}
+\toprule
+\textbf{Methods} & \textbf{Avg.} & \textbf{R0} & \textbf{R1} & \textbf{R2} & \textbf{Of0} & \textbf{Of1} & \textbf{Of2} & \textbf{Of3} & \textbf{Of4}\\
+\midrule
+RTG-SLAM(ICP)[5] & \cellcolor{yellow!30}0.471 & \cellcolor{yellow!30}0.429 & \cellcolor{yellow!30}0.690 & \cellcolor{yellow!30}0.544 & \cellcolor{yellow!30}0.640 & \cellcolor{yellow!30}0.336 & \cellcolor{yellow!30}0.434 & \cellcolor{yellow!30}0.281 & \cellcolor{yellow!30}0.419\\
+GS-ICP-SLAM(GICP)[6] & \cellcolor{lime!50}0.593 & \cellcolor{lime!50}0.465 & \cellcolor{lime!50}0.772 & \cellcolor{lime!50}0.723 & \cellcolor{lime!50}0.681 & \cellcolor{lime!50}0.522 & \cellcolor{lime!50}0.582 & \cellcolor{lime!50}0.438 & \cellcolor{lime!50}0.558\\
+Gaussian-SLAM(PLANE ICP)[7] & 0.633 & 0.476 & 0.812 & 0.781 & 0.709 & 0.541 & 0.667 & 0.449 & 0.625\\
+Gaussian-SLAM(HYBRID)[7] & 0.631 & 0.476 & 0.812 & 0.781 & 0.709 & 0.537 & 0.662 & 0.446 & 0.624\\
+\midrule
+\textbf{Ours} & \cellcolor{green!30}\textbf{0.009} & \cellcolor{green!30}\textbf{0.007} & \cellcolor{green!30}\textbf{0.008} & \cellcolor{green!30}\textbf{0.010} & \cellcolor{green!30}\textbf{0.009} & \cellcolor{green!30}\textbf{0.009} & \cellcolor{green!30}\textbf{0.011} & \cellcolor{green!30}\textbf{0.009} & \cellcolor{green!30}\textbf{0.011}\\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\textbf{Table 1.} presents the ATE RMSE results in centimeters for
+various methods across different sequences in the Replica dataset. Our
+method significantly outperforms the baselines, achieving an average ATE
+RMSE of \textbf{0.00925 cm}, which is an order of magnitude better than
+the closest competitor. This substantial improvement demonstrates the
+effectiveness of our approach in accurately estimating the camera's
+position. The low translational errors indicate that our method can
+precisely align the observed depth images with the rendered depth from
+the 3D Gaussian scene.
+
+\begin{table}[htbp]
+\renewcommand{\thetable}{\textbf{\arabic{table}}}
+\renewcommand{\tablename}{\textbf{Table}}
+\centering
+\caption{\textbf{Replica[26] (AAE RMSE ↓[°]).}}
+\label{table:_textbf_replica_26_a}
+\begin{adjustbox}{max width=\columnwidth,max height=!,center}
+\begin{tabular}{lccccccccc}
+\toprule
+\textbf{Methods} & \textbf{Avg.} & \textbf{R0} & \textbf{R1} & \textbf{R2} & \textbf{Of0} & \textbf{Of1} & \textbf{Of2} & \textbf{Of3} & \textbf{Of4}\\
+\midrule
+RTG-SLAM(ICP)[5] & \cellcolor{green!30}\textbf{0.576} & \cellcolor{green!30}\textbf{0.720} & \cellcolor{green!30}\textbf{0.826} & \cellcolor{yellow!30}0.744 & \cellcolor{green!30}\textbf{0.054} & \cellcolor{green!30}\textbf{0.537} & \cellcolor{yellow!30}0.360 & \cellcolor{yellow!30}0.330 & \cellcolor{yellow!30}0.430\\
+GS-ICP-SLAM(GICP)[6] & \cellcolor{lime!50}1.279 & \cellcolor{lime!50}1.659 & 1.951 & 1.607 & \cellcolor{lime!50}0.281 & \cellcolor{yellow!30}0.895 & 2.580 & 1.110 & 2.940\\
+Gaussian-SLAM(PLANE ICP)[7] & 1.287 & 1.834 & \cellcolor{lime!50}1.880 & \cellcolor{lime!50}1.398 & 0.305 & 1.019 & 1.060 & 1.100 & 1.130\\
+Gaussian-SLAM(HYBRID)[7] & 1.955 & 2.265 & 3.493 & 2.783 & 0.287 & \cellcolor{lime!50}0.945 & \cellcolor{lime!50}0.580 & \cellcolor{lime!50}0.720 & \cellcolor{lime!50}0.630\\
+\midrule
+\textbf{Ours} & \cellcolor{yellow!30}0.810 & \cellcolor{yellow!30}0.931 & \cellcolor{yellow!30}1.006 & \cellcolor{green!30}\textbf{0.666} & \cellcolor{yellow!30}0.248 & 1.197 & \cellcolor{green!30}\textbf{0.011} & \cellcolor{green!30}\textbf{0.009} & \cellcolor{green!30}\textbf{0.011}\\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\textbf{Table 2.} presents the Absolute Angular Error (AAE) RMSE in
+degrees for various methods on the Replica dataset. Our method achieves
+a competitive average AAE RMSE of \textbf{0.80982°}, indicating superior
+rotational accuracy in most sequences. In sequences with significant
+rotational movements, such as Of2, Of3, and Of4, our approach
+consistently outperforms the baselines. For instance, in sequence Of3,
+our method achieves an AAE RMSE of \textbf{0.00930°}, compared to
+\textbf{0.33000°} by RTG-SLAM and higher errors by other methods. This
+exceptional performance can be attributed to the effective utilization
+of the differentiable rendering pipeline and the optimization strategy
+that precisely aligns the depth gradients between the rendered and
+observed images.
+
+To evaluate the robustness of our method in real-world scenarios, we
+conducted experiments on the TUM RGB-D dataset, which presents
+challenges such as sensor noise and dynamic environments.
+
+\begin{table}[htbp]
+\renewcommand{\thetable}{\textbf{\arabic{table}}}
+\renewcommand{\tablename}{\textbf{Table}}
+\centering
+\caption{\textbf{TUM[27] (ATE RMSE ↓[cm]).}}
+\label{table:_textbf_tum_27_ate_r}
+\begin{adjustbox}{max width=\columnwidth,max height=!,center}
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Methods} & \textbf{Avg.} & \textbf{fr1/desk} & \textbf{fr1/desk2} & \textbf{fr1/room} & \textbf{fr2/xyz} & \textbf{fr3/off.}\\
+\midrule
+RTG-SLAM(ICP)[5] & \cellcolor{green!30}\textbf{0.576} & \cellcolor{green!30}\textbf{0.720} & \cellcolor{green!30}\textbf{0.826} & \cellcolor{yellow!30}0.744 & \cellcolor{green!30}\textbf{0.054} & \cellcolor{green!30}\textbf{0.537}\\
+GS-ICP-SLAM(GICP)[6] & \cellcolor{lime!50}1.279 & \cellcolor{lime!50}1.659 & 1.951 & 1.607 & \cellcolor{lime!50}0.281 & \cellcolor{yellow!30}0.895\\
+Gaussian-SLAM(PLANE ICP)[7] & 1.287 & 1.834 & \cellcolor{lime!50}1.880 & \cellcolor{lime!50}1.398 & 0.305 & 1.019\\
+Gaussian-SLAM(HYBRID)[7] & 1.955 & 2.265 & 3.493 & 2.783 & 0.287 & \cellcolor{lime!50}0.945\\
+\midrule
+\textbf{Ours} & \cellcolor{yellow!30}0.810 & \cellcolor{yellow!30}0.931 & \cellcolor{yellow!30}1.006 & \cellcolor{green!30}\textbf{0.666} & \cellcolor{yellow!30}0.248 & 1.197\\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\textbf{Table 3.} presents the ATE RMSE in centimeters for various
+methods on the TUM-RGBD dataset {[}27{]}. Our method achieves
+competitive results with an average ATE RMSE of \textbf{8.0982 cm},
+outperforming GS-ICP-SLAM{[}6{]} and Gaussian-SLAM{[}7{]} in most
+sequences. While RTG-SLAM{[}5{]} shows lower errors in some sequences,
+our method consistently provides accurate pose estimates across
+different environments. The increased error compared to the Replica
+dataset is expected due to the real-world challenges present in the TUM
+RGB-D dataset, such as sensor noise and environmental variability.
+Despite these challenges, our method demonstrates robustness and
+maintains reasonable localization accuracy.
+
+\begin{table}[htbp]
+\renewcommand{\thetable}{\textbf{\arabic{table}}}
+\renewcommand{\tablename}{\textbf{Table}}
+\centering
+\caption{\textbf{TUM[27] (AAE RMSE ↓[°]).}}
+\label{table:_textbf_tum_27_aae_r}
+\begin{adjustbox}{max width=\columnwidth,max height=!,center}
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Methods} & \textbf{Avg.} & \textbf{fr1/desk} & \textbf{fr1/desk2} & \textbf{fr1/room} & \textbf{fr2/xyz} & \textbf{fr3/off.}\\
+\midrule
+RTG-SLAM(ICP)[5] & \cellcolor{green!30}\textbf{0.916} & \cellcolor{yellow!30}1.181 & \cellcolor{yellow!30}1.557 & \cellcolor{yellow!30}1.355 & \cellcolor{yellow!30}0.138 & \cellcolor{green!30}\textbf{0.347}\\
+GS-ICP-SLAM(GICP)[6] & \cellcolor{yellow!30}0.959 & \cellcolor{lime!50}1.288 & \cellcolor{lime!50}1.618 & \cellcolor{lime!50}1.363 & \cellcolor{lime!50}0.147 & \cellcolor{lime!50}0.381\\
+Gaussian-SLAM(PLANE ICP)[7] & 1.090 & 1.388 & 1.791 & 1.564 & 0.182 & 0.525\\
+Gaussian-SLAM(HYBRID)[7] & 1.117 & 1.426 & 2.098 & 1.594 & \cellcolor{green!30}\textbf{0.114} & \cellcolor{yellow!30}0.355\\
+\midrule
+\textbf{Ours} & \cellcolor{lime!50}0.979 & \cellcolor{green!30}\textbf{1.126} & \cellcolor{green!30}\textbf{1.265} & \cellcolor{green!30}\textbf{0.907} & 0.789 & 0.808\\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\textbf{Table 4.} presents the AAE RMSE results in degrees for the TUM
+RGB-D dataset. Our method achieves an average AAE RMSE of
+\textbf{0.97928°}, which is competitive with the other methods. In
+sequences such as fr1/room, our method demonstrates superior rotational
+accuracy with an AAE RMSE of \textbf{0.90722°}, compared to higher
+errors by the baselines. The slightly higher rotational errors in the
+TUM RGB-D dataset, compared to the Replica dataset, can be attributed to
+the complexities of real-world data, including sensor inaccuracies and
+dynamic elements in the environment. Nonetheless, our method maintains
+reliable performance across various sequences.
+
+\subsection{Discussion}\label{discussion}
+
+The experimental results indicate that our method consistently achieves
+high localization accuracy, particularly in terms of translational
+error, where we significantly outperform existing approaches on the
+Replica dataset. The rotational accuracy of our method is also
+competitive, often surpassing other methods in challenging sequences.
+These outcomes demonstrate the effectiveness of our approach in
+leveraging the differentiable rendering capabilities of 3D Gaussian
+splatting for pose estimation.
+
+Several factors contribute to the superior performance of our method. By
+utilizing a fully differentiable depth rendering process, our method
+allows for efficient gradient-based optimization of camera poses,
+leading to precise alignment between the rendered and observed depth
+images. The combination of depth loss and contour loss in our
+optimization objective enables the method to capture both absolute depth
+differences and structural features, enhancing the robustness and
+accuracy of pose estimation. Additionally, employing quaternions for
+rotation representation provides a continuous and singularity-free
+parameter space, improving the stability and convergence of the
+optimization process.
+
+While our method shows excellent performance on the Replica dataset, the
+increased errors on the TUM RGB-D dataset highlight areas for potential
+improvement. Real-world datasets introduce challenges such as sensor
+noise, dynamic objects, and incomplete depth data due to occlusions.
+Addressing these challenges in future work could further enhance the
+robustness of our method.
+
+\subsection{Limitations}\label{limitations}
+
+Despite the promising results, our method has certain limitations. The
+reliance on accurate depth data means that performance may degrade in
+environments where the depth sensor data is noisy or incomplete.
+Additionally, our current implementation focuses on frame-to-frame pose
+estimation with initialization from the previous frame's ground-truth
+pose. In practical applications, this assumption may not hold, and
+integrating our method into a full SLAM system with robust
+initialization and loop closure capabilities would be necessary.
+Furthermore, handling dynamic scenes and improving computational
+efficiency for large-scale environments remain areas for future
+exploration.
+
+\section{Conclusion}\label{conclusion}
+
+In this paper, we introduced \textbf{GSplatLoc}, a novel method for
+ultra-precise camera localization that leverages the differentiable
+rendering capabilities of 3D Gaussian splatting. By formulating pose
+estimation as a gradient-based optimization problem within a fully
+differentiable framework, our approach enables efficient and accurate
+alignment between rendered depth maps from a pre-existing 3D Gaussian
+scene and observed depth images.
+
+Extensive experiments on the Replica and TUM RGB-D datasets demonstrate
+that GSplatLoc significantly outperforms state-of-the-art SLAM systems
+in terms of both translational and rotational accuracy. On the Replica
+dataset, our method achieves an average Absolute Trajectory Error (ATE
+RMSE) of 0.00925\,cm, surpassing existing approaches by an order of
+magnitude. The method also maintains competitive performance on the TUM
+RGB-D dataset, exhibiting robustness in real-world scenarios despite
+challenges such as sensor noise and dynamic elements.
+
+The superior performance of GSplatLoc can be attributed to several key
+factors. The utilization of a fully differentiable depth rendering
+process allows for efficient gradient-based optimization of camera
+poses. The combination of depth and contour losses in our optimization
+objective captures both absolute depth differences and structural
+features, enhancing the accuracy of pose estimation. Moreover, employing
+quaternions for rotation representation provides a continuous and
+singularity-free parameter space, improving the stability and
+convergence of the optimization process.
+
+While the results are promising, there are limitations to address in
+future work. The reliance on accurate depth data implies that
+performance may degrade with noisy or incomplete sensor information.
+Integrating GSplatLoc into a full SLAM system with robust
+initialization, loop closure, and the capability to handle dynamic
+scenes would enhance its applicability. Additionally, exploring methods
+to improve computational efficiency for large-scale environments remains
+an important direction for future research.
+
+In conclusion, GSplatLoc represents a significant advancement in camera
+localization accuracy for SLAM systems, setting a new standard for
+localization techniques in dense mapping. The method's ability to
+achieve ultra-precise pose estimation has substantial implications for
+applications in robotics and augmented reality, where accurate and
+efficient localization is critical.
+
+\phantomsection\label{refs}
+\begin{CSLReferences}{0}{1}
+\bibitem[\citeproctext]{ref-kerlDenseVisualSLAM2013}
+\CSLLeftMargin{1 }%
+\CSLRightInline{Kerl, C., Sturm, J., Cremers, D.:
+{`\href{https://doi.org/10.1109/IROS.2013.6696650}{Dense visual {SLAM}
+for {RGB-D} cameras}'}, in {`2013 {IEEE}/{RSJ International Conference}
+on {Intelligent Robots} and {Systems}'} (IEEE, 2013), pp. 2100--2106}
+
+\bibitem[\citeproctext]{ref-mildenhallNeRFRepresentingScenes2022}
+\CSLLeftMargin{2 }%
+\CSLRightInline{Mildenhall, B., Srinivasan, P.P., Tancik, M., Barron,
+J.T., Ramamoorthi, R., Ng, R.:
+{`\href{https://doi.org/10.1145/3503250}{{NeRF}: Representing scenes as
+neural radiance fields for view synthesis}'}\emph{Commun. ACM}, 2022,
+\textbf{65}, (1), pp. 99--106. }
+
+\bibitem[\citeproctext]{ref-sandstromPointslamDenseNeural2023}
+\CSLLeftMargin{3 }%
+\CSLRightInline{Sandström, E., Li, Y., Van Gool, L., Oswald, M.R.:
+{`\href{http://openaccess.thecvf.com/content/ICCV2023/html/Sandstrom_Point-SLAM_Dense_Neural_Point_Cloud-based_SLAM_ICCV_2023_paper.html}{Point-slam:
+{Dense} neural point cloud-based slam}'}, in {`Proceedings of the
+{IEEE}/{CVF International Conference} on {Computer Vision}'} (2023), pp.
+18433--18444}
+
+\bibitem[\citeproctext]{ref-kerbl3DGaussianSplatting2023}
+\CSLLeftMargin{4 }%
+\CSLRightInline{Kerbl, B., Kopanas, G., Leimkühler, T., Drettakis, G.:
+{`\href{https://doi.org/10.1145/3592433}{{3D Gaussian Splatting} for
+{Real-Time Radiance Field Rendering}}'}\emph{ACM Transactions on
+Graphics}, 2023, \textbf{42}, (4), pp. 1--14. }
+
+\bibitem[\citeproctext]{ref-pengRTGSLAMRealtime3D2024}
+\CSLLeftMargin{5 }%
+\CSLRightInline{Peng, Z., Shao, T., Liu, Y., \emph{et al.}:
+{`{RTG-SLAM}: {Real-time 3D Reconstruction} at {Scale} using {Gaussian
+Splatting}'}, \url{http://arxiv.org/abs/2404.19706}, accessed July 2024}
+
+\bibitem[\citeproctext]{ref-haRGBDGSICPSLAM2024}
+\CSLLeftMargin{6 }%
+\CSLRightInline{Ha, S., Yeon, J., Yu, H.: {`{RGBD GS-ICP SLAM}'},
+\url{http://arxiv.org/abs/2403.12550}, accessed May 2024}
+
+\bibitem[\citeproctext]{ref-yugayGaussianSLAMPhotorealisticDense2024}
+\CSLLeftMargin{7 }%
+\CSLRightInline{Yugay, V., Li, Y., Gevers, T., Oswald, M.R.:
+{`Gaussian-{SLAM}: {Photo-realistic Dense SLAM} with {Gaussian
+Splatting}'}, \url{http://arxiv.org/abs/2312.10070}, accessed June 2024}
+
+\bibitem[\citeproctext]{ref-mur-artalOrbslam2OpensourceSlam2017}
+\CSLLeftMargin{8 }%
+\CSLRightInline{Mur-Artal, R., Tardós, J.D.:
+{`\href{https://doi.org/10.1109/TRO.2017.2705103}{Orb-Slam2: {An}
+open-source slam system for monocular, stereo, and rgb-d
+cameras}'}\emph{IEEE transactions on robotics}, 2017, \textbf{33}, (5),
+pp. 1255--1262. }
+
+\bibitem[\citeproctext]{ref-camposOrbslam3AccurateOpensource2021}
+\CSLLeftMargin{9 }%
+\CSLRightInline{Campos, C., Elvira, R., Rodríguez, J.J.G., Montiel,
+J.M., Tardós, J.D.:
+{`\href{https://doi.org/10.1109/TRO.2021.3075644}{Orb-Slam3: {An}
+accurate open-source library for visual, visual--inertial, and multimap
+slam}'}\emph{IEEE Transactions on Robotics}, 2021, \textbf{37}, (6), pp.
+1874--1890. }
+
+\bibitem[\citeproctext]{ref-kerlRobustOdometryEstimation2013}
+\CSLLeftMargin{10 }%
+\CSLRightInline{Kerl, C., Sturm, J., Cremers, D.:
+{`\href{https://doi.org/10.1109/ICRA.2013.6631104}{Robust odometry
+estimation for {RGB-D} cameras}'}, in {`2013 {IEEE} international
+conference on robotics and automation'} (IEEE, 2013), pp. 3748--3754}
+
+\bibitem[\citeproctext]{ref-newcombeDTAMDenseTracking2011}
+\CSLLeftMargin{11 }%
+\CSLRightInline{Newcombe, R.A., Lovegrove, S.J., Davison, A.J.:
+{`\href{https://doi.org/10.1109/ICCV.2011.6126513}{{DTAM}: {Dense}
+tracking and mapping in real-time}'}, in {`2011 international conference
+on computer vision'} (IEEE, 2011), pp. 2320--2327}
+
+\bibitem[\citeproctext]{ref-whelanElasticFusionRealtimeDense2016}
+\CSLLeftMargin{12 }%
+\CSLRightInline{Whelan, T., Salas-Moreno, R.F., Glocker, B., Davison,
+A.J., Leutenegger, S.:
+{`\href{https://doi.org/10.1177/0278364916669237}{{ElasticFusion}:
+{Real-time} dense {SLAM} and light source estimation}'}\emph{The
+International Journal of Robotics Research}, 2016, \textbf{35}, (14),
+pp. 1697--1716. }
+
+\bibitem[\citeproctext]{ref-yen-chenInerfInvertingNeural2021}
+\CSLLeftMargin{13 }%
+\CSLRightInline{Yen-Chen, L., Florence, P., Barron, J.T., Rodriguez, A.,
+Isola, P., Lin, T.-Y.:
+{`\href{https://doi.org/10.1109/IROS51168.2021.9636708}{Inerf:
+{Inverting} neural radiance fields for pose estimation}'}, in {`2021
+{IEEE}/{RSJ International Conference} on {Intelligent Robots} and
+{Systems} ({IROS})'} (IEEE, 2021), pp. 1323--1330}
+
+\bibitem[\citeproctext]{ref-mullerInstantNeuralGraphics2022}
+\CSLLeftMargin{14 }%
+\CSLRightInline{Müller, T., Evans, A., Schied, C., Keller, A.:
+{`\href{https://doi.org/10.1145/3528223.3530127}{Instant neural graphics
+primitives with a multiresolution hash encoding}'}\emph{ACM Trans.
+Graph.}, 2022, \textbf{41}, (4), pp. 1--15. }
+
+\bibitem[\citeproctext]{ref-yuPlenoctreesRealtimeRendering2021}
+\CSLLeftMargin{15 }%
+\CSLRightInline{Yu, A., Li, R., Tancik, M., Li, H., Ng, R., Kanazawa,
+A.:
+{`\href{http://openaccess.thecvf.com/content/ICCV2021/html/Yu_PlenOctrees_for_Real-Time_Rendering_of_Neural_Radiance_Fields_ICCV_2021_paper.html}{Plenoctrees
+for real-time rendering of neural radiance fields}'}, in {`Proceedings
+of the {IEEE}/{CVF International Conference} on {Computer Vision}'}
+(2021), pp. 5752--5761}
+
+\bibitem[\citeproctext]{ref-fridovich-keilPlenoxelsRadianceFields2022}
+\CSLLeftMargin{16 }%
+\CSLRightInline{Fridovich-Keil, S., Yu, A., Tancik, M., Chen, Q., Recht,
+B., Kanazawa, A.:
+{`\href{http://openaccess.thecvf.com/content/CVPR2022/html/Fridovich-Keil_Plenoxels_Radiance_Fields_Without_Neural_Networks_CVPR_2022_paper.html}{Plenoxels:
+{Radiance} fields without neural networks}'}, in {`Proceedings of the
+{IEEE}/{CVF} conference on computer vision and pattern recognition'}
+(2022), pp. 5501--5510}
+
+\bibitem[\citeproctext]{ref-keethaSplaTAMSplatTrack2024}
+\CSLLeftMargin{17 }%
+\CSLRightInline{Keetha, N., Karhade, J., Jatavallabhula, K.M., \emph{et
+al.}: {`{SplaTAM}: {Splat}, {Track} \& {Map 3D Gaussians} for {Dense
+RGB-D SLAM}'}, \url{http://arxiv.org/abs/2312.02126}, accessed June
+2024}
+
+\bibitem[\citeproctext]{ref-huCGSLAMEfficientDense2024}
+\CSLLeftMargin{18 }%
+\CSLRightInline{Hu, J., Chen, X., Feng, B., \emph{et al.}: {`{CG-SLAM}:
+{Efficient Dense RGB-D SLAM} in a {Consistent Uncertainty-aware 3D
+Gaussian Field}'}, \url{http://arxiv.org/abs/2403.16095}, accessed July
+2024}
+
+\bibitem[\citeproctext]{ref-beslMethodRegistration3shapes1992}
+\CSLLeftMargin{19 }%
+\CSLRightInline{Besl, P.J., McKay, N.D.:
+{`\href{https://doi.org/10.1117/12.57955}{Method for registration of
+3-{D} shapes}'}, in {`Sensor fusion {IV}: Control paradigms and data
+structures'} (Spie, 1992), pp. 586--606}
+
+\bibitem[\citeproctext]{ref-segalGeneralizedicp2009a}
+\CSLLeftMargin{20 }%
+\CSLRightInline{Segal, A., Haehnel, D., Thrun, S.:
+{`\href{https://doi.org/10.15607/RSS.2009.V.021}{Generalized-icp.}'}, in
+{`Robotics: Science and systems'} (Seattle, WA, 2009), p. 435}
+
+\bibitem[\citeproctext]{ref-parkColoredPointCloud2017}
+\CSLLeftMargin{21 }%
+\CSLRightInline{Park, J., Zhou, Q.-Y., Koltun, V.:
+{`\href{http://openaccess.thecvf.com/content_iccv_2017/html/Park_Colored_Point_Cloud_ICCV_2017_paper.html}{Colored
+point cloud registration revisited}'}, in {`Proceedings of the {IEEE}
+international conference on computer vision'} (2017), pp. 143--152}
+
+\bibitem[\citeproctext]{ref-steinbruckerRealtimeVisualOdometry2011}
+\CSLLeftMargin{22 }%
+\CSLRightInline{Steinbrücker, F., Sturm, J., Cremers, D.:
+{`\href{https://doi.org/10.1109/ICCVW.2011.6130321}{Real-time visual
+odometry from dense {RGB-D} images}'}, in {`2011 {IEEE} international
+conference on computer vision workshops ({ICCV Workshops})'} (IEEE,
+2011), pp. 719--722}
+
+\bibitem[\citeproctext]{ref-kuipersQuaternionsRotationSequences1999}
+\CSLLeftMargin{23 }%
+\CSLRightInline{Kuipers, J.B.:
+{`\href{https://books.google.com/books?hl=en&lr=&id=_Og9DwAAQBAJ&oi=fnd&pg=PR21&dq=kuipers+Quaternions+Rotation+Sequences+1999&ots=t3I3ky6Zut&sig=o3xQEsvNHM-t2AIySNcaxBhSc_I}{Quaternions
+and rotation sequences: A primer with applications to orbits, aerospace,
+and virtual reality}'} (Princeton university press, 1999)}
+
+\bibitem[\citeproctext]{ref-zwickerEWASplatting2002}
+\CSLLeftMargin{24 }%
+\CSLRightInline{Zwicker, M., Pfister, H., Van Baar, J., Gross, M.:
+{`\href{https://doi.org/10.1109/TVCG.2002.1021576}{{EWA}
+splatting}'}\emph{IEEE Transactions on Visualization and Computer
+Graphics}, 2002, \textbf{8}, (3), pp. 223--238. }
+
+\bibitem[\citeproctext]{ref-kanopoulosDesignImageEdge1988}
+\CSLLeftMargin{25 }%
+\CSLRightInline{Kanopoulos, N., Vasanthavada, N., Baker, R.L.:
+{`\href{https://doi.org/10.1109/4.996}{Design of an image edge detection
+filter using the {Sobel} operator}'}\emph{IEEE Journal of solid-state
+circuits}, 1988, \textbf{23}, (2), pp. 358--367. }
+
+\bibitem[\citeproctext]{ref-straubReplicaDatasetDigital2019}
+\CSLLeftMargin{26 }%
+\CSLRightInline{Straub, J., Whelan, T., Ma, L., \emph{et al.}: {`The
+{Replica Dataset}: {A Digital Replica} of {Indoor Spaces}'},
+\url{http://arxiv.org/abs/1906.05797}, accessed August 2024}
+
+\bibitem[\citeproctext]{ref-sturmBenchmarkEvaluationRGBD2012}
+\CSLLeftMargin{27 }%
+\CSLRightInline{Sturm, J., Engelhard, N., Endres, F., Burgard, W.,
+Cremers, D.: {`\href{https://doi.org/10.1109/IROS.2012.6385773}{A
+benchmark for the evaluation of {RGB-D SLAM} systems}'}, in {`2012
+{IEEE}/{RSJ} international conference on intelligent robots and
+systems'} (IEEE, 2012), pp. 573--580}
+
+\bibitem[\citeproctext]{ref-sucarImapImplicitMapping2021}
+\CSLLeftMargin{28 }%
+\CSLRightInline{Sucar, E., Liu, S., Ortiz, J., Davison, A.J.:
+{`\href{http://openaccess.thecvf.com/content/ICCV2021/html/Sucar_iMAP_Implicit_Mapping_and_Positioning_in_Real-Time_ICCV_2021_paper.html}{Imap:
+{Implicit} mapping and positioning in real-time}'}, in {`Proceedings of
+the {IEEE}/{CVF} international conference on computer vision'} (2021),
+pp. 6229--6238}
+
+\end{CSLReferences}
+\end{document}

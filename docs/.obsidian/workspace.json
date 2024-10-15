@@ -1,0 +1,251 @@
+{
+  "main": {
+    "id": "f9508c72efec9470",
+    "type": "split",
+    "children": [
+      {
+        "id": "56f04877aeb0f138",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "7fab16442c0d8556",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "main.md",
+                "mode": "source",
+                "source": false
+              }
+            }
+          },
+          {
+            "id": "6ffd2e8344ccb62c",
+            "type": "leaf",
+            "state": {
+              "type": "pdf",
+              "state": {
+                "file": "main.pdf"
+              }
+            }
+          }
+        ],
+        "currentTab": 1
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "1cf8a6c5889338d6",
+    "type": "split",
+    "children": [
+      {
+        "id": "986c2766e027ae11",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "e5fb1abf4287bce9",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical"
+              }
+            }
+          },
+          {
+            "id": "3af94c3f442307d5",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {}
+            }
+          },
+          {
+            "id": "1d2a417b4d4421b7",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 284.5110321044922
+  },
+  "right": {
+    "id": "47a7fb051f9573eb",
+    "type": "split",
+    "children": [
+      {
+        "id": "1be3b56d45aba669",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "5d12bf5c232f51b8",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true
+              }
+            }
+          },
+          {
+            "id": "21942943f6ffac1a",
+            "type": "leaf",
+            "state": {
+              "type": "git-view",
+              "state": {}
+            }
+          },
+          {
+            "id": "3a18507384016340",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "main.pdf",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              }
+            }
+          },
+          {
+            "id": "39b47acb13211c4a",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "main.pdf",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              }
+            }
+          },
+          {
+            "id": "9da4cbf1e09b4a69",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              }
+            }
+          },
+          {
+            "id": "b4f886dd03f52d69",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "main.pdf"
+              }
+            }
+          },
+          {
+            "id": "9bc84faad8aaa4a0",
+            "type": "leaf",
+            "state": {
+              "type": "file-properties",
+              "state": {
+                "file": "main.pdf"
+              }
+            }
+          }
+        ],
+        "currentTab": 5
+      }
+    ],
+    "direction": "horizontal",
+    "width": 360.5
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "command-palette:Open command palette": false,
+      "publish:Publish changes...": false,
+      "random-note:Open random note": false,
+      "workspaces:Manage workspace layouts": false,
+      "switcher:Open quick switcher": false,
+      "obsidian-importer:Open Importer": false,
+      "omnisearch:Omnisearch": false,
+      "obsidian-git:Open Git source control": false,
+      "oz-clear-unused-images:Clear Unused Images": false,
+      "obsidian-excalidraw-plugin:Create new drawing": false,
+      "darlal-switcher-plus:Open in Headings Mode": false,
+      "darlal-switcher-plus:Open Symbols for the active editor": false
+    }
+  },
+  "active": "6ffd2e8344ccb62c",
+  "lastOpenFiles": [
+    "main.md",
+    "main.pdf",
+    "iet-computer-vision.csl",
+    "essay/texs/GsplatLoc/main.pdf",
+    "essay/texs/GsplatLoc/main.md",
+    "essay/zotero/attachments/gs_spalt/relate_works/Bescos et al_2018_DynaSLAM.pdf",
+    "essay/zotero/attachments/gs_spalt/relate_works/Zhou et al_2017_Unsupervised learning of depth and ego-motion from video.pdf",
+    "essay/zotero/attachments/gs_spalt/relate_works/Kuipers_1999_Quaternions and rotation sequences2.pdf",
+    "essay/zotero/attachments/gs_spalt/relate_works/Max_1995_Optical models for direct volume rendering.pdf",
+    "essay/zotero/attachments/gs_spalt/relate_works/Pomerleau et al_2013_Comparing ICP variants on real-world data sets2.pdf",
+    "essay/zotero/attachments/gs_spalt/relate_works/Pomerleau et al_2013_Comparing ICP variants on real-world data sets.pdf",
+    "essay/zotero/attachments/gs_spalt/relate_works/Reiser et al_2021_Kilonerf.pdf",
+    "essay/texs/GsplatLoc/mess notes.md",
+    "essay/journals/IET/Cover question.md",
+    "essay/journals/IET/Free Format.md",
+    "essay/journals/IET/Submission.md",
+    "essay/journals/IET/ITE computer vision.md",
+    "essay/journals/IET/Main.md",
+    "essay/texs/GsplatLoc/flowchart.svg",
+    "essay/texs/GsplatLoc/Flowcharts (2).svg",
+    "essay/texs/GsplatLoc/flowchart.png",
+    "essay/texs/GsplatLoc/flowchat.png",
+    "essay/texs/GsplatLoc/png_N_background.png",
+    "essay/texs/GsplatLoc/Flowcharts.svg",
+    "assets/Pasted image 20240922204500.png",
+    "essay/texs/GsplatLoc/New Bitmap image.bmp",
+    "essay/template/arxiv/main.md",
+    "essay/template/Pandoc-config.md",
+    "essay/basic/Math.md",
+    "essay/basic/image.md",
+    "essay/basic/GICP.md",
+    "essay/basic/experiment.md",
+    "essay/basic/3D.md",
+    "docs/OS/Docker.md",
+    "docs/OS/GPU.md",
+    "docs/OS/Windows/Powersehll.md",
+    "docs/OS/Windows/CMD.md",
+    "docs/OS/Ubuntu/wsl.md",
+    "docs/OS/Ubuntu/system.md",
+    "docs/URLs.md",
+    "docs/account.md",
+    "@engelDirectSparseOdometry2017], [@forsterSVOFastSemidirect2014], [@camposOrbslam3AccurateOpensource2021.md",
+    "essay/zotero/annotations/haRGBDGSICPSLAM2024.md",
+    "assets/20240822115648.png",
+    "assets/screenshot.png",
+    "未命名.canvas",
+    "未命名 3.canvas",
+    "未命名 2.canvas",
+    "未命名 1.canvas",
+    "Untitled.canvas"
+  ]
+}

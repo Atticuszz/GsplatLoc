@@ -1,0 +1,20 @@
+{
+  "pathToPandoc": "C:\\Program Files\\Pandoc\\pandoc.EXE",
+  "tooltipDelay": 400,
+  "zoteroGroups": [
+    {
+      "id": 1,
+      "name": "My Library",
+      "lastUpdate": 1728988420396
+    }
+  ],
+  "renderCitations": false,
+  "renderCitationsReadingMode": false,
+  "renderLinkCitations": false,
+  "hideLinks": false,
+  "enableCiteKeyCompletion": false,
+  "pathToBibliography": "C:\\Users\\18317\\DevSpace\\DocHub\\essay\\zotero\\bibliography.bib",
+  "pullFromZotero": true,
+  "cslStyleURL": "https://raw.githubusercontent.com/citation-style-language/styles/master/ieee.csl",
+  "showCitekeyTooltips": true
+}

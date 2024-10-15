@@ -1,0 +1,148 @@
+\documentclass[twocolumn]{article} % 启用双栏排版
+\usepackage{arxiv} % 特定于arxiv的样式包，用于格式设置
+% packages
+\usepackage[utf8]{inputenc} % 允许utf-8输入
+\usepackage{fontspec}
+\usepackage{url}            % 用于类型设置URL
+\usepackage{booktabs}       % 创建专业质量的表格
+\usepackage{amsfonts}       % 黑板数学符号
+\usepackage{nicefrac}       % 紧凑的分数符号
+\usepackage{microtype}      % 微排版
+\usepackage{lipsum}         % 生成填充文本
+\usepackage{graphicx}       % 图形包
+\usepackage{doi}            % 处理DOI
+\usepackage{titlesec}       % 调整节标题的间距和格式
+\usepackage{setspace}
+\setstretch{1.1}
+\usepackage[backend=biber, natbib=true]{biblatex} % 使用biblatex处理参考文献，指定使用biber作为后端和IEEE样式
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{tabularx}
+\usepackage{colortbl}
+
+\usepackage{adjustbox}
+
+
+\usepackage{libertinus}
+
+
+\usepackage{mathtools}
+% 设置所有显示公式自动编号
+\mathtoolsset{showonlyrefs=false}
+
+% Pandoc 3.2.1 introduced new LaTex macro \pandocbounded: https://github.com/Wandmalfarbe/pandoc-latex-template/issues/391
+\newcommand{\pandocbounded}[1]{\begin{adjustbox}{max width=\textwidth,max height=\textheight,keepaspectratio}#1\end{adjustbox}}
+
+% caption front
+\usepackage{caption}
+\captionsetup{font=small,labelfont=bf}
+
+
+% 配置链接颜色
+\definecolor{authorcolor}{HTML}{800080} % 淡紫色
+\definecolor{linkcolor}{HTML}{A6CE39}   % 绿色
+
+% 标题设置
+\title{\large\bfseries\textit{$first-title-word$} $title-rest$}
+
+
+\usepackage{titling}
+\usepackage{hyperref}
+
+\usepackage{footnote}
+
+% 自定义作者信息命令
+\newcommand{\authorinfo}[5]{%
+  \begin{tabular}[t]{c}
+    \href{#1}{\includegraphics[scale=0.06]{orcid.pdf}\hspace{1mm}\textbf{#2}}#5\\
+    \texttt{#3}\\
+    #4
+  \end{tabular}%
+}
+
+% 重定义 \and 命令以添加适当的间距
+\renewcommand{\and}{\hspace{2em}}
+
+% 作者设置
+\author{%
+$for(authors)$\authorinfo{$it.orcid$}{$it.name$}{$it.email$}{$it.affiliation$\\$it.address$}{$if(it.corresponding)$\textsuperscript{*}$endif$}$if(it.last)$$else$\and$endif$$endfor$%
+}
+
+% TODO: footnote
+% \usepackage[bottom]{footmisc}  % 使用 footmisc 包的 bottom 选项
+
+% % 简化对应作者注释为脚注的命令
+% \newcommand{\correspondingauthor}{%
+%   \footnote{Corresponding author}%
+% }
+
+% 预定义作者格式
+\preauthor{\begin{center}\large\bfseries}
+\postauthor{\par\end{center}}
+
+% PDF元数据
+\hypersetup{
+    pdftitle={$first-title-word$ $title-rest$},
+    pdfauthor={$for(authors)$$it.name$$sep$, $endfor$},
+}
+
+
+
+% % csl for pandoc --citeproc https://github.com/Zettlr/Zettlr/issues/4879
+$if(csl-refs)$
+% definitions for citeproc citations
+\NewDocumentCommand\citeproctext{}{}
+\NewDocumentCommand\citeproc{mm}{%
+\begingroup\def\citeproctext{#2}\cite{#1}\endgroup}
+\makeatletter
+% allow citations to break across lines
+\let\@cite@ofmt\@firstofone
+% avoid brackets around text for \cite:
+\def\@biblabel#1{}
+\def\@cite#1#2{{#1\if@tempswa , #2\fi}}
+\makeatother
+\newlength{\cslhangindent}
+\setlength{\cslhangindent}{1.5em}
+\newlength{\csllabelwidth}
+\setlength{\csllabelwidth}{1.5em}
+\newenvironment{CSLReferences}[2] % #1 hanging-indent, #2 entry-spacing
+{\begin{list}{}{%
+  \setlength{\itemindent}{0pt}
+  \setlength{\leftmargin}{0pt}
+  \setlength{\parsep}{0pt}
+  % turn on hanging indent if param 1 is 1
+  \ifodd #1
+  \setlength{\leftmargin}{\cslhangindent}
+  \setlength{\itemindent}{-1\cslhangindent}
+  \fi
+  % set entry spacing
+  \setlength{\itemsep}{0.5\baselineskip}}}
+{\end{list}}
+\usepackage{calc}
+\newcommand{\CSLBlock}[1]{\hfill\break\parbox[t]{\linewidth}{\strut\ignorespaces#1\strut}}
+\newcommand{\CSLLeftMargin}[1]{\parbox[t]{\csllabelwidth}{\strut#1\strut}}
+\newcommand{\CSLRightInline}[1]{\parbox[t]{\linewidth - \csllabelwidth}{\strut#1\strut}}
+\newcommand{\CSLIndent}[1]{\hspace{\cslhangindent}#1}
+$endif$
+
+
+% tightlist error using Pandoc with Markdown https://stackoverflow.com/questions/40438037/tightlist-error-using-pandoc-with-markdown
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+% main
+\begin{document}
+
+\twocolumn[
+\begin{@twocolumnfalse}
+  \maketitle
+  % \correspondingauthor
+  \begin{abstract}
+    $abstract$
+  \end{abstract}
+  \vspace{1cm}
+\end{@twocolumnfalse}
+]
+
+$body$
+\end{document}

@@ -1,0 +1,72 @@
+{
+  "ssh-add": {
+    "ssh-add": { "currentFile": { "count": 1, "lastUpdated": 1709277016698 } }
+  },
+  "system": {
+    "system": {
+      "currentFile": { "count": 1, "lastUpdated": 1709277029332 },
+      "internalLink": { "count": 1, "lastUpdated": 1709432870478 }
+    }
+  },
+  "proxy": {
+    "proxy": { "currentFile": { "count": 1, "lastUpdated": 1709430781142 } }
+  },
+  ".wslconfig": {
+    ".wslconfig": {
+      "currentFile": { "count": 1, "lastUpdated": 1709430910124 }
+    }
+  },
+  "restart": {
+    "restart": { "currentFile": { "count": 1, "lastUpdated": 1709430976354 } }
+  },
+  "wsl.conf": {
+    "wsl.conf": { "currentFile": { "count": 1, "lastUpdated": 1709430978473 } }
+  },
+  "wsl-ubuntu": {
+    "wsl-ubuntu": {
+      "currentFile": { "count": 1, "lastUpdated": 1709430981312 }
+    }
+  },
+  "--shutdown": {
+    "--shutdown": {
+      "currentFile": { "count": 1, "lastUpdated": 1709430992324 }
+    }
+  },
+  "latest": {
+    "latest": { "currentFile": { "count": 1, "lastUpdated": 1709431769286 } }
+  },
+  "wsl": {
+    "wsl": { "internalLink": { "count": 5, "lastUpdated": 1709433589955 } }
+  },
+  "download": {
+    "download": { "currentFile": { "count": 1, "lastUpdated": 1709432459868 } }
+  },
+  "ubuntu": {
+    "ubuntu": { "currentFile": { "count": 5, "lastUpdated": 1709434081426 } }
+  },
+  "initialization": {
+    "initialization": {
+      "currentFile": { "count": 1, "lastUpdated": 1709432535213 }
+    }
+  },
+  "proxies": {
+    "proxies": { "currentFile": { "count": 2, "lastUpdated": 1709434275204 } }
+  },
+  "Poetry": {
+    "Poetry": { "internalLink": { "count": 1, "lastUpdated": 1709433261503 } }
+  },
+  "default": {
+    "default": { "currentFile": { "count": 2, "lastUpdated": 1709433956491 } }
+  },
+  "connection": {
+    "connection": {
+      "currentFile": { "count": 1, "lastUpdated": 1709434038209 }
+    }
+  },
+  "first": {
+    "first": { "currentFile": { "count": 1, "lastUpdated": 1709434277255 } }
+  },
+  "uninstall": {
+    "uninstall": { "currentFile": { "count": 1, "lastUpdated": 1709450459318 } }
+  }
+}

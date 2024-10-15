@@ -1,0 +1,213 @@
+:root {
+  --symbol-base-padding: 0px;
+  --symbol-indent-padding: 12px;
+}
+
+.qsp-filter-active {
+  color: var(--text-accent);
+}
+
+/* suggestion file path icon */
+.qsp-path-indicator {
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+/* symbol suggestion, symbol type icon */
+.qsp-symbol-indicator {
+  width: 2em;
+  text-align: center;
+  float: left;
+  font-weight: 800;
+}
+
+.qsp-symbol-indicator.callout {
+  background-color:inherit;
+  padding: inherit;
+}
+
+/* warning/error text */
+.qsp-warning {
+  color: var(--text-error);
+}
+
+.qsp-tag {
+  background-color: var(--background-modifier-hover);
+  border-radius: var(--radius-s);
+  font-size: 9px;
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.05em;
+  line-height: var(--line-height-normal);
+  margin-left: var(--size-2-3);
+  padding: 0 var(--size-4-1);
+  text-transform: uppercase;
+  align-self: center;
+}
+
+/* settings panel, indent setting to create visual hierarchy */
+.qsp-setting-item-indent {
+  border: 0px;
+  padding-left: 36px;
+}
+
+/* symbol suggestion should align to the left */
+.suggestion-item.qsp-suggestion-symbol {
+  justify-content: left;
+}
+
+/* highlight recently used file suggestions */
+.suggestion-item.qsp-recent-file .qsp-title {
+  text-decoration: underline dotted var(--text-muted);
+}
+
+/* highlight currently open editor suggestions */
+.suggestion-item.qsp-open-editor .qsp-title {
+  text-decoration: underline var(--text-accent);
+}
+
+/* highlight the open editor flair icon */
+.suggestion-item.qsp-open-editor .qsp-editor-indicator {
+  color: var(--text-accent);
+}
+
+/* symbol suggestion display the icon first (on the left side) */
+.qsp-suggestion-symbol > .qsp-aux {
+  order: -1;
+}
+
+/* symbol suggestion indentation when in outline mode */
+.qsp-symbol-l0 {
+  padding-left: var(--symbol-base-padding);
+}
+
+.qsp-symbol-l1 {
+  padding-left: calc(var(--symbol-base-padding) + var(--symbol-indent-padding));
+}
+
+.qsp-symbol-l2 {
+  padding-left: calc(var(--symbol-base-padding) + (2 * var(--symbol-indent-padding)));
+}
+
+.qsp-symbol-l3 {
+  padding-left: calc(var(--symbol-base-padding) + (3 * var(--symbol-indent-padding)));
+}
+
+.qsp-symbol-l4 {
+  padding-left: calc(var(--symbol-base-padding) + (4 * var(--symbol-indent-padding)));
+}
+
+.qsp-symbol-l5 {
+  padding-left: calc(var(--symbol-base-padding) + (5 * var(--symbol-indent-padding)));
+}
+
+.qsp-symbol-l6 {
+  padding-left: calc(var(--symbol-base-padding) + (6 * var(--symbol-indent-padding)));
+}
+
+/* Wrapper container for rendered markdown content using MarkdownRenderer.render() */
+.qsp-rendered-container {}
+
+/* Override styles for child elements of rendered markdown content */
+.qsp-rendered-container > * {
+  /* Remove start margin/padding so elements don't take up a bunch of extra
+    horizontal space */
+  margin-block-start: 0px;
+  margin-inline-start: 0px;
+  padding-block-start: 0px;
+  padding-inline-start: 0px;
+  /* Disable elements from reacting to mouse events, so things like links & tags don't
+     react to mouseover hover, etc.. */
+  pointer-events: none;
+}
+
+/* Rendered markdown content that starts with an Ordered List should keep it's start
+  margin so that the list number is displayed properly. Obsidian defaults to 40px */
+.qsp-rendered-container > ol {
+  padding-inline-start: 40px;
+  margin-block-end: 0px;
+}
+
+/* command suggestion item */
+.qsp-suggestion-command {}
+
+/* editor suggestion item */
+.qsp-suggestion-editor {}
+
+/* heading suggestion item */
+.qsp-suggestion-headings {}
+
+/* related item suggestion */
+.qsp-suggestion-related {}
+
+/* symbol suggestion item */
+.qsp-suggestion-symbol {}
+
+/* workspace suggestion item */
+.qsp-suggestion-workspace {}
+
+/* file suggestion when not in standard mode */
+.qsp-suggestion-file {}
+
+/* alias suggestion when not in standard mode */
+.qsp-suggestion-alias {}
+
+/* suggestion primary content container */
+.qsp-content {}
+
+/* suggestion title element */
+.qsp-title {}
+
+/* suggestion secondary information element (like file path information) */
+.qsp-note {}
+
+/* suggestion flair/icon container */
+.qsp-aux {}
+
+/* suggestion file path element */
+.qsp-path {}
+
+/* headings suggestion, heading level (H1, H2, etc..) icon */
+.qsp-headings-indicator {}
+
+/* flair icon for suggestions that represent a recent file */
+.qsp-recent-indicator {}
+
+/* flair icon for suggestion that represent a file currently opened in an editor */
+.qsp-editor-indicator {}
+
+/* flair icon for suggestions that represent a related file */
+.qsp-related-indicator {}
+
+/* flair icon for suggestions that represent an alias */
+.qsp-alias-indicator {}
+
+/* Quick Open indicator container element */
+.qsp-quick-open-aux {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+/* Quick Open hotkey indicator element */
+.qsp-quick-open-hotkey {}
+
+/* headings level */
+.qsp-headings-l1 {}
+.qsp-headings-l2 {}
+.qsp-headings-l3 {}
+.qsp-headings-l4 {}
+.qsp-headings-l5 {}
+.qsp-headings-l6 {}
+
+/* Usually the "plus" button button in the NavBar on mobile platforms */
+.qsp-mobile-launcher-button {}
+
+/* Prompt instructions element in custom modes */
+.qsp-prompt-instructions {}
+
+/* Prompt instructions element for facets in custom modes */
+.qsp-prompt-instructions-facets {}
+
+/* Prompt instructions element for mode triggers */
+.qsp-prompt-instructions-modes {}

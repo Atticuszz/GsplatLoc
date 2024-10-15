@@ -1,0 +1,63 @@
+{
+  "items": [
+    {
+      "name": "Markdown"
+    },
+    {
+      "name": "Markdown (Hugo)"
+    },
+    {
+      "name": "Html"
+    },
+    {
+      "name": "TextBundle"
+    },
+    {
+      "name": "Typst"
+    },
+    {
+      "name": "PDF",
+      "customArguments": "--pdf-engine=xelatex --mathjax  --citeproc",
+      "openExportedFile": true
+    },
+    {
+      "name": "Word (.docx)"
+    },
+    {
+      "name": "OpenOffice"
+    },
+    {
+      "name": "RTF"
+    },
+    {
+      "name": "Epub"
+    },
+    {
+      "name": "Latex"
+    },
+    {
+      "name": "Media Wiki"
+    },
+    {
+      "name": "reStructuredText"
+    },
+    {
+      "name": "Textile"
+    },
+    {
+      "name": "OPML"
+    },
+    {
+      "name": "Bibliography"
+    }
+  ],
+  "defaultExportDirectoryMode": "Same",
+  "openExportedFile": true,
+  "env": {},
+  "showExportProgressBar": true,
+  "lastEditName": "PDF",
+  "lastExportDirectory": {
+    "win32": "C:\\Users\\18317\\DevSpace\\DocHub/essay/texs"
+  },
+  "lastExportType": "PDF"
+}
