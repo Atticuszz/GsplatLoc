@@ -148,7 +148,7 @@ You can always see the logs of this and every other plugin by opening the consol
                     <a href="https://en.wikipedia.org/wiki/UTC%C2%B100:00">UTC\xB100:00</a>.
             `;let i=new z.Setting(this.containerEl).setName("Oldest age in coloring");i.descEl.innerHTML=this.previewOldestAgeDescriptionHtml(this.settings.lineAuthor.coloringMaxAge)[0],i.addText(a=>{a.setPlaceholder("1y"),a.setValue(this.settings.lineAuthor.coloringMaxAge),a.onChange(s=>{let[o,l]=this.previewOldestAgeDescriptionHtml(s);i.descEl.innerHTML=o,l&&(this.lineAuthorSettingHandler("coloringMaxAge",s),this.refreshColorSettingsName("oldest"))})}),this.createColorSetting("newest"),this.createColorSetting("oldest"),new z.Setting(this.containerEl).setName("Text color").addText(a=>{a.setValue(this.settings.lineAuthor.textColorCss),a.onChange(s=>{this.lineAuthorSettingHandler("textColorCss",s)})}).descEl.innerHTML=`
                     The CSS color of the gutter text.<br/>
-                    
+
                     It is higly recommended to use
                     <a href="https://developer.mozilla.org/en-US/docs/Web/CSS/Using_CSS_custom_properties">
                     CSS variables</a>

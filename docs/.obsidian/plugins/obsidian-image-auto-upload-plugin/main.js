@@ -837,7 +837,7 @@ npmRunPath$1.exports;
 		env[path] = module.exports(options);
 
 		return env;
-	}; 
+	};
 } (npmRunPath$1));
 
 var npmRunPathExports = npmRunPath$1.exports;
@@ -1518,7 +1518,7 @@ function requireSignals () {
 		    'SIGSTKFLT',
 		    'SIGUNUSED'
 		  );
-		} 
+		}
 	} (signals$1));
 	return signals$1.exports;
 }
@@ -3921,7 +3921,7 @@ function requireSafeBuffer () {
 		    throw new TypeError('Argument must be a number')
 		  }
 		  return buffer.SlowBuffer(size)
-		}; 
+		};
 	} (safeBuffer, safeBuffer.exports));
 	return safeBuffer.exports;
 }
@@ -5822,7 +5822,7 @@ function requirePipeline () {
 	  exports.PassThrough = require_stream_passthrough();
 	  exports.finished = requireEndOfStream();
 	  exports.pipeline = requirePipeline();
-	} 
+	}
 } (readable, readable.exports));
 
 var readableExports = readable.exports;

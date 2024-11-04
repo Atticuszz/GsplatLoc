@@ -1,7 +1,6 @@
 import json
 from collections import defaultdict
 from datetime import datetime
-
 from pathlib import Path
 from typing import Literal
 
@@ -11,7 +10,6 @@ from matplotlib import pyplot as plt
 from torch import Tensor
 
 from .utils import calculate_RMSE_np, compute_silhouette_diff
-
 
 # os.environ["WANDB_API_KEY"] = "cedd2caf3e18114de5c6bac2c2c789298ece4ea5"
 # os.environ["WANDB_MODE"] = "offline"
@@ -278,7 +276,7 @@ class WandbLogger:
         organized_data = defaultdict(lambda: defaultdict(dict))
         # If appending and file exists, load existing data
         if mode == "overwrite" and Path("./res.json").exists():
-            with open("./res.json", "r") as f:
+            with open("./res.json") as f:
                 existing_data = json.load(f)
             organized_data.update(existing_data)
 
