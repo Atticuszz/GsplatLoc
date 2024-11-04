@@ -1,12 +1,12 @@
 import json
 
 # Load JSON data from a file
-with open("res.json", "r") as file:
+with open("res.json") as file:
     data = json.load(file)
 
 
 # Define the function to create markdown tables from the provided data
-def create_markdown_table(data, error_type,timer:int=1):
+def create_markdown_table(data, error_type, timer: int = 1):
     # Define the datasets and the headers for the tables
     datasets = {
         "Replica": [
@@ -78,5 +78,5 @@ def create_markdown_table(data, error_type,timer:int=1):
 
 
 # Generate markdown tables for ATE and AAE
-create_markdown_table(data, "ATE",100)
+create_markdown_table(data, "ATE", 100)
 create_markdown_table(data, "AAE")

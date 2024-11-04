@@ -1,6 +1,6 @@
-/*- editor line width - default 700px -*/ 
+/*- editor line width - default 700px -*/
 body {
-  --file-line-width: 900px;  
+  --file-line-width: 900px;
 }
 
 /*- editor line width - fills entire editor -*/

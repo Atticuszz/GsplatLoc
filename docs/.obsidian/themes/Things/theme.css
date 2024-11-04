@@ -1294,42 +1294,42 @@ settings:
         type: heading
         level: 2
         collapsed: true
-    - 
+    -
         id: default-font-color
         title: Default font colors
         description: Use the default font color styling for bold, italics, and quotes
         type: class-toggle
         default:  false
-    - 
+    -
         id: text-highlight-bg-l
         title: Highlight color (light)
         type: variable-color
         format: rgb
         default: 'rgba(255, 208, 0, 0.4)'
-    - 
+    -
         id: text-highlight-bg-d
         title: Highlight color (dark)
         type: variable-color
         format: rgb
         default: 'rgba(255, 208, 0, 0.4)'
-    - 
+    -
         id: strong-color
         title: Bold font color
         type: variable-color
         format: hex
-        default: '#FF82B2' 
-    - 
+        default: '#FF82B2'
+    -
         id: em-color
         title: Italics font color
         type: variable-color
         format: hex
-        default: '#FF82B2' 
-    - 
+        default: '#FF82B2'
+    -
         id: quote-color
         title: Blockquotes font color
         type: variable-color
         format: hex
-        default: '#3EB4BF' 
+        default: '#3EB4BF'
     -
         id: code-normal
         title: Inline code blocks font color (Light mode)
@@ -1342,90 +1342,90 @@ settings:
         type: variable-color
         format: hex
         default: '#555E68'
-    - 
+    -
         id: tag-background-color-l
         title: Tag background color (Light mode)
         type: variable-color
         format: hex
-        default: '#BDE1D3' 
-    - 
+        default: '#BDE1D3'
+    -
         id: tag-font-color-l
         title: Tag font color (Light mode)
         type: variable-color
         format: hex
-        default: '#1D694B' 
-    - 
+        default: '#1D694B'
+    -
         id: tag-background-color-d
         title: Tag background color (Dark mode)
         type: variable-color
         format: hex
-        default: '#1D694B' 
-    - 
+        default: '#1D694B'
+    -
         id: tag-font-color-d
         title: Tag font color (Dark mode)
         type: variable-color
         format: hex
-        default: '#FFFFFF' 
-    - 
+        default: '#FFFFFF'
+    -
         id: progress-color
         title: Progress colorful mode switcher
         description: Toggle progress color scheme
         type: class-toggle
         default: false
-    - 
+    -
         id: progress-color-1
         title: progress 2-39% color
         type: variable-color
         opacity: true
         format: hex
         default: '#ad5758'
-    - 
+    -
         id: progress-color-2
         title: progress 40-59% color
         type: variable-color
         opacity: true
         format: hex
         default: '#b87f4c'
-    - 
+    -
         id: progress-color-3
         title: progress 60-79% color
         type: variable-color
         opacity: true
         format: hex
         default: '#d2b874'
-    - 
+    -
         id: progress-color-4
         title: progress 80-99% color
         type: variable-color
         opacity: true
         format: hex
         default: '#b0c07e'
-    - 
+    -
         id: progress-color-5
         title: progress 1,100% color
         type: variable-color
         opacity: true
         format: hex
         default: '#768399'
-    - 
+    -
         id: headings
         title: Headings
         type: heading
         level: 2
         collapsed: true
-    - 
+    -
         id: level-1-headings
         title: Level 1 Headings
         type: heading
         level: 3
         collapsed: true
-    - 
+    -
         id: h1-size
         title: H1 font size
         description: Accepts any CSS font-size value
         type: variable-text
         default: 1.7em
-    - 
+    -
         id: h1-weight
         title: H1 font weight
         description: Accepts numbers representing the CSS font-weight
@@ -1437,31 +1437,31 @@ settings:
         type: variable-color
         format: hex
         default: '#'
-    - 
+    -
         id: level-2-headings
         title: Level 2 Headings
         type: heading
         level: 3
         collapsed: true
-    - 
+    -
         id: h2-size
         title: H2 font size
         description: Accepts any CSS font-size value
         type: variable-text
         default: 1.5em
-    - 
+    -
         id: h2-weight
         title: H2 font weight
         description: Accepts numbers representing the CSS font-weight
         type: variable-number
         default: 700
-    - 
+    -
         id: h2-color
         title: H2 color
         type: variable-color
         format: hex
         default: '#2E80F2'
-    - 
+    -
         id: h2-underline
         title: H2 underline
         description: Toggle H2 underline (border-bottom)
@@ -1473,13 +1473,13 @@ settings:
         type: heading
         level: 3
         collapsed: true
-    - 
+    -
         id: h3-size
         title: H3 font size
         description: Accepts any CSS font-size value
         type: variable-text
         default: 1.2em
-    - 
+    -
         id: h3-weight
         title: H3 font weight
         description: Accepts numbers representing the CSS font-weight
@@ -1491,25 +1491,25 @@ settings:
         type: variable-color
         format: hex
         default: '#2E80F2'
-    - 
+    -
         id: level-4-headings
         title: Level 4 Headings
         type: heading
         level: 3
         collapsed: true
-    - 
+    -
         id: h4-size
         title: H4 font size
         description: Accepts any CSS font-size value
         type: variable-text
         default: 1.1em
-    - 
+    -
         id: h4-weight
         title: H4 font weight
         description: Accepts numbers representing the CSS font-weight
         type: variable-number
         default: 500
-    - 
+    -
         id: h4-color
         title: H4 color
         type: variable-color
@@ -1528,43 +1528,43 @@ settings:
             -
                 label: None
                 value: none
-    - 
+    -
         id: level-5-headings
         title: Level 5 Headings
         type: heading
         level: 3
         collapsed: true
-    - 
+    -
         id: h5-size
         title: H5 font size
         description: Accepts any CSS font-size value
         type: variable-text
         default: 1em
-    - 
+    -
         id: h5-weight
         title: H5 font weight
         description: Accepts numbers representing the CSS font-weight
         type: variable-number
         default: 500
-    - 
+    -
         id: h5-color
         title: H5 color
         type: variable-color
         format: hex
         default: '#E83E3E'
-    - 
+    -
         id: level-6-headings
         title: Level 6 Headings
         type: heading
         level: 3
         collapsed: true
-    - 
+    -
         id: h6-size
         title: H6 font size
         description: Accepts any CSS font-size value
         type: variable-text
         default: 0.9em
-    - 
+    -
         id: h6-weight
         title: H6 font weight
         description: Accepts numbers representing the CSS font-weight

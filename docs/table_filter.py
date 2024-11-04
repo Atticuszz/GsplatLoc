@@ -24,11 +24,7 @@ def process_image(elem: Image, doc):
     # 检查是否是跨列图片
     is_cross_column = "cross-column" in elem.classes
     width = next(
-        (
-            attr.split("=")[1]
-            for attr in elem.attributes
-            if attr.startswith("width=")
-        ),
+        (attr.split("=")[1] for attr in elem.attributes if attr.startswith("width=")),
         "0.8\\textwidth",
     )
     print(f"width:{width}", file=sys.stderr)
@@ -39,9 +35,17 @@ def process_image(elem: Image, doc):
         latex = (
             "\\begin{figure*}[htbp]\n"
             + "    \\centering\n"
-            + "    \\includegraphics[width=" + width + "]{" + src + "}\n"
-            + "    \\caption{" + caption + "}\n"
-            + "    \\label{fig:" + (elem.identifier or 'unnamed') + "}\n"
+            + "    \\includegraphics[width="
+            + width
+            + "]{"
+            + src
+            + "}\n"
+            + "    \\caption{"
+            + caption
+            + "}\n"
+            + "    \\label{fig:"
+            + (elem.identifier or "unnamed")
+            + "}\n"
             + "\\end{figure*}"
         )
         print(f"image:{latex}", file=sys.stderr)
@@ -211,6 +215,7 @@ def main(doc=None):
     except Exception as e:
         print(f"Error processing run_filter: {str(e)}", file=sys.stderr)
         return elem
+
 
 if __name__ == "__main__":
     main()

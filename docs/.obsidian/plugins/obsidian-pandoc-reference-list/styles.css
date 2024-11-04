@@ -3,7 +3,7 @@
 name: Pandoc Reference List
 id: pandoc-reference-list
 settings:
-  - 
+  -
     id: pwc-font-size
     title: Sidebar reference list font size
     type: variable-number-slider
@@ -12,7 +12,7 @@ settings:
     min: 8
     max: 24
     step: 1
-  - 
+  -
     id: pwc-tooltip-font-size
     title: Tooltip citation font size
     type: variable-number-slider
@@ -21,14 +21,14 @@ settings:
     min: 8
     max: 24
     step: 1
-  - 
+  -
     id: pwc-citation-color
     title: Citation color
     type: variable-themed-color
     format: hex
     default-light: '#2e3338'
     default-dark: '#dcddde'
-  - 
+  -
     id: pwc-citation-color-missing
     title: Unresolved citation color
     description: This color will be applied if a citekey is not found in your bibliography file
@@ -36,14 +36,14 @@ settings:
     format: hex
     default-light: '#2e3338'
     default-dark: '#dcddde'
-  - 
+  -
     id: pwc-citation-underline-color
     title: Citation underline color
     type: variable-themed-color
     format: hex
     default-light: '#705dcf'
     default-dark: '#7f6df2'
-  - 
+  -
     id: pwc-citation-underline-color-missing
     title: Unresolved citation underline color
     description: This color will be applied if a citekey is not found in your bibliography file
@@ -51,7 +51,7 @@ settings:
     format: hex
     default-light: '#'
     default-dark: '#'
-  - 
+  -
     id: pwc-citation-formatting-color
     title: Citation formatting color
     description: Changes the color of brackets and semicolons
@@ -59,7 +59,7 @@ settings:
     format: hex
     default-light: '#2e3338'
     default-dark: '#dcddde'
-  - 
+  -
     id: pwc-citation-extra-color
     title: 'Citation "extra" color'
     description: 'Changes the color text within a citation, eg. "pp. 22-24"'

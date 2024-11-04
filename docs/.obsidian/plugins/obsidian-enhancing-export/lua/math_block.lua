@@ -29,11 +29,11 @@ function process(el)
   return el
 end
 
-function RawInline(el) 
+function RawInline(el)
   return process(el)
 end
 
-function RawBlock(el) 
+function RawBlock(el)
   return process(el)
 end
 
@@ -60,9 +60,3 @@ end
 function BulletList(el)
   return process(el)
 end
-
-
-
-
-
-
